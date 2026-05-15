@@ -1,0 +1,45 @@
+# News Feed v1 Progress
+
+- Started News Feed v1 implementation.
+- Called `ui-ux-pro-max` design system search for compact sports control-room news feed.
+- Inspected current placeholder, layout import, package scripts, and existing message-panel styles.
+- Added news types, source colors, mock news, adapters, and news store using plan A fallback.
+- Replaced the placeholder import with a real `MessagePanel` component and removed the duplicate placeholder file.
+- Added compact one-line news row styles, source dots, pin button states, status line, and internal scrolling.
+- First build failed on zhibo8 adapter type narrowing; rewrote parsing to collect typed `NewsItem[]` directly.
+- Build passed. Initial dev server launch with `npm` hit Windows PATH key collision; retrying with `npm.cmd`.
+- `npm.cmd` hit the same PATH collision in `Start-Process`; switching to a PowerShell background job.
+- `npm run build` passed.
+- Dev server is responding at `http://localhost:5173`.
+- Started News Feed v2.1. Restored planning files and re-ran UI/UX design skill for compact dark infinite news feed.
+- Inspected current zhibo8 adapter, news store, types, and MessagePanel.
+- Added `footballFilter` with zhibo8 URL path priority, excluded keywords, and title fallback.
+- Updated zhibo8 adapter to normalize URLs, parse possible publish times, filter football news, mark category, and expose optional detail verification.
+- Replaced mock news with 33 football-only items across zhibo8, x, and reddit.
+- Updated MessagePanel to paginate normal news with `visibleCount += 20`; pinned news stays separate above the normal list.
+- `npm run build` passed for News Feed v2.1.
+- zhibo8 network probe succeeded after approval: HTTP 200, `Access-Control-Allow-Origin: *`, and 32 `/news/web/zuqiu/` links found on the page.
+- Local dev server is still responding at `http://localhost:5173`.
+- Removed all mock news from the feed pipeline and deleted `src/news/mockNews.ts`.
+- Tightened zhibo8 URL normalization to keep real mobile article URLs under `https://m.zhibo8.com/news/web/...` and ignore `javascript:` links.
+- Build passed after removing mock data.
+- zhibo8 verification found 16 football title links; first 5 sampled article URLs all returned HTTP 200.
+- Started News Feed v3: automatic sync and manual refresh.
+- Re-ran design skill for compact dark refresh controls.
+- Inspected current news store, MessagePanel, and CSS before editing.
+- Added `fetchLatestNews()` and `mergeNewsItems()` to centralize fetch, dedupe, sort, and added-count logic.
+- Added fallback football notices only for initial empty failure state, per v3 failure-handling requirement.
+- Rebuilt `MessagePanel` with 90s auto sync, manual pull button, 30s cooldown, request lock, last updated time, and shared sync path.
+- Preserved pinning, localStorage pin state, internal pagination, and compact one-line list layout.
+- `npm run build` passed after News Feed v3 changes.
+- Started Bottom Ticker v1.
+- Inspected bottom ticker placeholder, Layout, MessagePanel pinning, news store storage helpers, ticker CSS, and existing mock ticker data.
+- Found that pin/unpin needs to save updated news items and emit a same-tab event for the bottom ticker.
+- Added `TickerSource`/`TickerItem`, `simplifyNewsTitle`, ticker composition with mock fallback, priority sorting, and text/url dedupe.
+- Replaced `BottomTickerPlaceholder` with `BottomTicker`, including duplicated content, CSS animation, hover/focus pause, clickable URLs, and source labels.
+- Updated `Layout` to render `BottomTicker`.
+- Updated `MessagePanel` to save updated pinned news items and dispatch the bottom ticker refresh event after initial load, merge sync, and pin/unpin.
+- Verified sample simplification: `届时安帅将七十岁！官方：巴西国家队和66岁安切洛蒂续约至2030年` -> `巴西国家队与安切洛蒂续约至2030年`.
+- `npm install` passed with no vulnerabilities.
+- `npm run build` passed.
+- `npm run dev -- --host 127.0.0.1` responded with HTTP 200 at `http://127.0.0.1:5173`.
