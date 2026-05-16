@@ -1,84 +1,104 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { allMatches } from "../data/mockWorldCup";
 import { readPinnedNewsIds, readStoredNewsItems } from "../news/newsStore";
-import { BOTTOM_TICKER_UPDATED_EVENT, composeBottomTickerItems, tickerSourceLabels } from "../news/ticker";
-import type { TickerItem } from "../news/types";
+import { BOTTOM_TICKER_UPDATED_EVENT } from "../news/ticker";
+import type { NewsItem } from "../news/types";
+import type { AppTheme } from "./ThemeToggle";
+import ThemeToggle from "./ThemeToggle";
 
-const loadTickerItems = () => {
+const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000;
+const STOP_WORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "this",
+  "that",
+  "world",
+  "cup",
+  "世界杯",
+  "比赛",
+  "官方",
+]);
+
+const getItemTime = (item: NewsItem) => {
+  const time = new Date(item.publishedAt || item.fetchedAt).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const getTrendingTerm = (items: NewsItem[]) => {
+  const counts = new Map<string, number>();
+  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
+
+  items
+    .filter((item) => getItemTime(item) >= recentThreshold)
+    .flatMap((item) => (item.translatedTitle || item.title).match(/[\p{L}\p{N}]{2,}/gu) ?? [])
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token.toLowerCase()))
+    .forEach((token) => counts.set(token, (counts.get(token) ?? 0) + 1));
+
+  const [topTerm] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+  return topTerm ?? "sampling";
+};
+
+const buildStatusItems = () => {
   const pinnedIds = new Set(readPinnedNewsIds());
-  const storedItems = readStoredNewsItems().map((item) => ({
-    ...item,
-    pinned: pinnedIds.has(item.id),
-  }));
+  const storedItems = readStoredNewsItems();
+  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
+  const recentItems = storedItems.filter((item) => getItemTime(item) >= recentThreshold);
+  const redditItems = recentItems.filter((item) => item.source === "reddit").length;
+  const zhibo8Items = recentItems.filter((item) => item.source === "zhibo8").length;
+  const xItems = recentItems.filter((item) => item.source === "x").length;
+  const pinnedCount = storedItems.filter((item) => pinnedIds.has(item.id)).length;
+  const liveCount = allMatches.filter((match) => match.status === "live").length;
+  const nextMatch = allMatches.find((match) => match.status !== "finished") ?? allMatches[0];
 
-  return composeBottomTickerItems(storedItems);
+  return [
+    `MATCHDAY ${nextMatch?.date.slice(5) ?? "--"}`,
+    `LIVE ${liveCount}`,
+    `HOT ${recentItems.length}`,
+    `REDDIT ${redditItems}`,
+    `ZB8 ${zhibo8Items}`,
+    `X ${xItems}`,
+    `PIN ${pinnedCount}`,
+    `TRENDING: ${getTrendingTerm(storedItems)}`,
+  ];
 };
 
-type TickerContentProps = {
-  isDuplicate?: boolean;
-  items: TickerItem[];
+type TopTickerPlaceholderProps = {
+  onThemeChange: (theme: AppTheme) => void;
+  theme: AppTheme;
 };
 
-function TickerContent({ isDuplicate = false, items }: TickerContentProps) {
-  return (
-    <div className="bottom-ticker-content top-live-ticker-content" aria-hidden={isDuplicate || undefined}>
-      {items.map((item) => {
-        const label = tickerSourceLabels[item.source];
-        const copy = (
-          <>
-            <span className="bottom-ticker-source">{label}</span>
-            <span className="bottom-ticker-divider">/</span>
-            <span className="bottom-ticker-text">{item.text}</span>
-          </>
-        );
-
-        return item.url ? (
-          <a
-            className="bottom-ticker-item top-live-ticker-item"
-            href={item.url}
-            key={item.id}
-            rel="noopener noreferrer"
-            tabIndex={isDuplicate ? -1 : undefined}
-            target="_blank"
-          >
-            {copy}
-          </a>
-        ) : (
-          <span className="bottom-ticker-item top-live-ticker-item" key={item.id}>
-            {copy}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-export default function TopTickerPlaceholder() {
-  const [items, setItems] = useState<TickerItem[]>(loadTickerItems);
-  const animationDuration = useMemo(() => `${Math.max(30, items.length * 5)}s`, [items.length]);
+export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTickerPlaceholderProps) {
+  const [statusItems, setStatusItems] = useState<string[]>(buildStatusItems);
+  const statusCopy = useMemo(() => statusItems.join(" / "), [statusItems]);
 
   useEffect(() => {
-    const refreshTicker = () => setItems(loadTickerItems());
+    const refreshTicker = () => setStatusItems(buildStatusItems());
 
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
     window.addEventListener("storage", refreshTicker);
 
+    const intervalId = window.setInterval(refreshTicker, 60_000);
+
     return () => {
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
       window.removeEventListener("storage", refreshTicker);
+      window.clearInterval(intervalId);
     };
   }, []);
 
   return (
-    <header className="top-ticker top-live-bar" aria-label="Top quick ticker">
-      <div className="top-flash-row">
-        <div className="ticker-label top-flash-label">QUICK</div>
-        <div className="bottom-ticker-viewport top-live-ticker-viewport" style={{ "--ticker-duration": animationDuration } as CSSProperties}>
-          <div className="bottom-ticker-track">
-            <TickerContent items={items} />
-            <TickerContent isDuplicate items={items} />
-          </div>
-        </div>
+    <header className="top-ticker top-live-bar" aria-label="System status ticker">
+      <div className="ticker-label top-flash-label">STATUS</div>
+      <div className="system-ticker-content" title={statusCopy}>
+        {statusItems.map((item) => (
+          <span key={item}>{item}</span>
+        ))}
       </div>
+      <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
     </header>
   );
 }

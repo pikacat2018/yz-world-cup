@@ -40,13 +40,13 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
                 <td className="team-cell">
                   <TeamName teamId={standing.teamId} />
                 </td>
-                <td>{standing.played}</td>
-                <td>{standing.wins}</td>
-                <td>{standing.draws}</td>
-                <td>{standing.losses}</td>
-                <td>{standing.goalsFor}</td>
-                <td>{standing.goalsAgainst}</td>
-                <td>{goalDifference > 0 ? `+${goalDifference}` : goalDifference}</td>
+                <td className="numeric-cell">{standing.played}</td>
+                <td className="numeric-cell">{standing.wins}</td>
+                <td className="numeric-cell">{standing.draws}</td>
+                <td className="numeric-cell">{standing.losses}</td>
+                <td className="numeric-cell">{standing.goalsFor}</td>
+                <td className="numeric-cell">{standing.goalsAgainst}</td>
+                <td className="numeric-cell">{goalDifference > 0 ? `+${goalDifference}` : goalDifference}</td>
                 <td className="points-cell">{standing.points}</td>
               </tr>
             );

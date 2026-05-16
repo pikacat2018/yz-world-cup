@@ -6,6 +6,7 @@ import {
   MAX_PINNED_NEWS,
   mergeNewsItems,
   NEWS_FEED_CONFIG,
+  readStoredNewsItems,
   saveNewsItems,
   savePinnedNewsIds,
 } from "../news/newsStore";
@@ -15,7 +16,7 @@ import {
   translateNewRedditItems,
 } from "../news/redditTranslations";
 import { sourceColors } from "../news/sourceColors";
-import { notifyBottomTickerUpdated } from "../news/ticker";
+import { BOTTOM_TICKER_UPDATED_EVENT, notifyBottomTickerUpdated } from "../news/ticker";
 import type { NewsItem } from "../news/types";
 
 const AUTO_SYNC_INTERVAL_MS = 90_000;
@@ -32,9 +33,13 @@ const getSearchText = (item: NewsItem) =>
     .filter(Boolean)
     .join(" ");
 
+const splitNews = (items: NewsItem[]) => ({
+  normal: items.filter((item) => !item.feedSection || item.feedSection === "latest"),
+  pinned: items.filter((item) => item.pinned).slice(0, MAX_PINNED_NEWS),
+});
+
 const formatNewsTime = (item: NewsItem) => {
   const date = new Date(item.publishedAt || item.fetchedAt);
-
   if (Number.isNaN(date.getTime())) return "--:-- --";
 
   const pad = (value: number) => String(value).padStart(2, "0");
@@ -51,16 +56,6 @@ function RefreshIcon() {
   );
 }
 
-const splitNews = (items: NewsItem[]) => {
-  const pinned = items.filter((item) => item.pinned).slice(0, MAX_PINNED_NEWS);
-  const pinnedIds = new Set(pinned.map((item) => item.id));
-  const normal = items.filter(
-    (item) => !pinnedIds.has(item.id) && !item.pinned && (!item.feedSection || item.feedSection === "latest"),
-  );
-
-  return { normal, pinned };
-};
-
 type NewsRowProps = {
   item: NewsItem;
   isUnreadNew: boolean;
@@ -70,7 +65,7 @@ type NewsRowProps = {
 
 function NewsRow({ isUnreadNew, item, onMarkRead, onTogglePinned }: NewsRowProps) {
   const displayTitle = item.translatedTitle || item.title;
-  const variantLabel = item.source === "reddit" ? (item.sourceVariant?.includes("hot") ? "热" : "新") : "";
+  const variantLabel = item.source === "reddit" && item.sourceVariant?.includes("hot") ? "热" : "";
   const title = item.url ? (
     <a
       className="news-title"
@@ -103,7 +98,7 @@ function NewsRow({ isUnreadNew, item, onMarkRead, onTogglePinned }: NewsRowProps
         {formatNewsTime(item)}
       </time>
       <button
-        aria-label={item.pinned ? "取消置顶" : "置顶消息"}
+        aria-label={item.pinned ? "取消精选" : "加入精选"}
         className={`news-pin-button ${item.pinned ? "active" : ""}`}
         onClick={(event) => {
           event.stopPropagation();
@@ -139,6 +134,20 @@ export default function MessagePanel() {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  useEffect(() => {
+    const refreshStoredItems = () => {
+      setItems(readStoredNewsItems());
+    };
+
+    window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshStoredItems);
+    window.addEventListener("storage", refreshStoredItems);
+
+    return () => {
+      window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshStoredItems);
+      window.removeEventListener("storage", refreshStoredItems);
+    };
+  }, []);
 
   const syncNews = useCallback(async (mode: "auto" | "manual" | "initial") => {
     if (isFetchingRef.current) return;
@@ -268,7 +277,7 @@ export default function MessagePanel() {
   }, [items, normalizedSearchQuery]);
   const visibleNormal = normal.slice(0, visibleCount);
   const hasMoreNormal = visibleCount < normal.length;
-  const hasNews = isSearching ? searchResults.length > 0 : pinned.length > 0 || normal.length > 0;
+  const hasNews = isSearching ? searchResults.length > 0 : normal.length > 0;
 
   useEffect(() => {
     if (!hasFetchError || hasNews) return;
@@ -303,7 +312,7 @@ export default function MessagePanel() {
     setNotice("");
 
     if (!target.pinned && pinned.length >= MAX_PINNED_NEWS) {
-      setNotice("置顶最多 10 条，请先取消一条。");
+      setNotice(`精选最多 ${MAX_PINNED_NEWS} 条，请先取消一条。`);
       return;
     }
 
@@ -320,9 +329,7 @@ export default function MessagePanel() {
     if (!target.url) return;
 
     markNewsIdRead(target.id);
-    setItems((current) =>
-      current.map((item) => (item.id === target.id ? { ...item, isRead: true } : item)),
-    );
+    setItems((current) => current.map((item) => (item.id === target.id ? { ...item, isRead: true } : item)));
   };
 
   const isUnreadNew = (item: NewsItem) => {
@@ -360,7 +367,7 @@ export default function MessagePanel() {
   const isFetchButtonDisabled = isFetching || isCoolingDown;
 
   return (
-    <section className="message-panel" aria-label="固定消息区">
+    <section className="message-panel" aria-label="实时消息流">
       <div className="message-title">
         <div className="message-title-copy">
           <span className="eyebrow">NEWS FEED</span>
@@ -417,26 +424,8 @@ export default function MessagePanel() {
               <div className="news-empty-state">没有匹配消息</div>
             )}
           </section>
-        ) : (
-          <>
-        {pinned.length > 0 && (
-          <section className="news-feed-section" aria-label="置顶消息">
-            <h3>置顶</h3>
-            <ul className="news-list">
-              {pinned.map((item) => (
-                <NewsRow
-                  isUnreadNew={isUnreadNew(item)}
-                  item={item}
-                  key={item.id}
-                  onMarkRead={markRead}
-                  onTogglePinned={togglePinned}
-                />
-              ))}
-            </ul>
-          </section>
-        )}
-          </>
-        )}
+        ) : null}
+
         {normal.length > 0 && (
           <section className="news-feed-section" aria-label="普通消息" hidden={isSearching}>
             <ul className="news-list">

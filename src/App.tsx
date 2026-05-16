@@ -2,9 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import AllGroupsOverview from "./components/AllGroupsOverview";
 import AllSchedulePage from "./components/AllSchedulePage";
 import Layout from "./components/Layout";
+import { type AppTheme, isAppTheme, THEME_STORAGE_KEY } from "./components/ThemeToggle";
 import { groups } from "./data/mockWorldCup";
 
 export default function App() {
+  const [theme, setTheme] = useState<AppTheme>(() => {
+    if (typeof window === "undefined") return "light-blue";
+
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return isAppTheme(savedTheme) ? savedTheme : "light-blue";
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   if (window.location.pathname === "/all-groups") {
     return <AllGroupsOverview />;
   }
@@ -35,8 +48,10 @@ export default function App() {
 
   return (
     <Layout
+      onThemeChange={setTheme}
       selectedGroup={selectedGroup}
       selectedGroupId={selectedGroupId}
+      theme={theme}
       onSelectGroup={setSelectedGroupId}
     />
   );

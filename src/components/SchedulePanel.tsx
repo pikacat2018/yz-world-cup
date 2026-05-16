@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react";
+import type { Match } from "../data/mockWorldCup";
 import { allMatches, getTeam } from "../data/mockWorldCup";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
+
+const DEFAULT_QUEUE_SIZE = 6;
 
 const splitScore = (score?: string) => {
   if (!score) return undefined;
@@ -12,29 +15,38 @@ const splitScore = (score?: string) => {
   return { homeScore, awayScore };
 };
 
+const getStageLabel = (match: Match) => {
+  if (match.groupId !== "KO") return `${match.groupId}组`;
+
+  if (match.stage === "32 强") return "1/16决赛";
+  if (match.stage === "16 强") return "1/8决赛";
+
+  return match.stage;
+};
+
 export default function SchedulePanel() {
   const matchDates = useMemo(
     () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).date))),
     [],
   );
   const [selectedDate, setSelectedDate] = useState(matchDates[0] ?? "");
-  const dailyMatches = allMatches.filter((match) => getBeijingDateTime(match).date === selectedDate);
   const activeDateIndex = matchDates.indexOf(selectedDate);
+  const queuedMatches = allMatches
+    .filter((match) => getBeijingDateTime(match).date >= selectedDate)
+    .slice(0, DEFAULT_QUEUE_SIZE);
 
   const openFullSchedule = () => {
     window.open("/schedule", "_blank", "noopener,noreferrer");
   };
 
   return (
-    <section className="panel schedule-panel" aria-label="Match queue">
-      <div className="panel-title-row">
+    <section className="panel schedule-panel" aria-label="赛程队列">
+      <div className="panel-title-row schedule-head-row">
         <div>
-          <h2>对阵赛程</h2>
-          <span className="eyebrow">MATCH QUEUE</span>
-          <span className="schedule-count-badge">{dailyMatches.length} matches</span>
+          <h2>赛程队列</h2>
         </div>
         <div className="schedule-title-tools">
-          <div className="date-switcher" aria-label="按日期查看赛程">
+          <div className="date-switcher" aria-label="选择比赛日期">
             <button
               aria-label="前一天"
               disabled={activeDateIndex <= 0}
@@ -59,40 +71,47 @@ export default function SchedulePanel() {
               +
             </button>
           </div>
-          <button className="overview-button schedule-all-button" aria-label="全部赛程" onClick={openFullSchedule} title="全部赛程" type="button">
-            ALL
+          <button
+            aria-label="打开全部比赛"
+            className="overview-button schedule-all-button"
+            onClick={openFullSchedule}
+            title="全部比赛"
+            type="button"
+          >
+            全部比赛
           </button>
         </div>
       </div>
       <div className="schedule-list">
-        {dailyMatches.map((match) => {
+        {queuedMatches.map((match) => {
           const home = match.homeTeamId ? getTeam(match.homeTeamId) : undefined;
           const away = match.awayTeamId ? getTeam(match.awayTeamId) : undefined;
           const beijingTime = getBeijingDateTime(match);
           const score = splitScore(match.score);
+          const stageLabel = getStageLabel(match);
 
           return (
             <article className={`schedule-row schedule-${match.status}`} key={match.id}>
-              <div className="schedule-id-block">
-                <span className="match-no">M{String(match.matchNo).padStart(2, "0")}</span>
-                <span>{match.groupId} 组</span>
-              </div>
-              <div className="schedule-time-block" aria-label="北京时间">
-                <span>{beijingTime.dateLabel}</span>
+              <span className="match-no schedule-match-no">M{String(match.matchNo).padStart(2, "0")}</span>
+              <span className="schedule-group-name" title={stageLabel}>
+                {stageLabel}
+              </span>
+              <div className="schedule-date-time" aria-label="北京时间">
+                <time>{beijingTime.dateLabel}</time>
                 <strong>{beijingTime.time}</strong>
               </div>
-              <div className="schedule-team-stack">
-                <div className="schedule-team-line">
-                  <span>
+              <div className="schedule-scoreline">
+                <div className="schedule-team-row">
+                  <strong className="schedule-team">
                     <TeamName fallback={match.homeLabel} teamId={home?.id} />
-                  </span>
-                  {score && <strong className="schedule-score">{score.homeScore}</strong>}
+                  </strong>
+                  <span className="schedule-score-box">{score?.homeScore ?? "-"}</span>
                 </div>
-                <div className="schedule-team-line">
-                  <span>
+                <div className="schedule-team-row">
+                  <strong className="schedule-team">
                     <TeamName fallback={match.awayLabel} teamId={away?.id} />
-                  </span>
-                  {score && <strong className="schedule-score">{score.awayScore}</strong>}
+                  </strong>
+                  <span className="schedule-score-box">{score?.awayScore ?? "-"}</span>
                 </div>
               </div>
             </article>

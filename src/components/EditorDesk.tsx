@@ -1,62 +1,120 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { MAX_PINNED_NEWS, readStoredNewsItems, saveNewsItems, savePinnedNewsIds } from "../news/newsStore";
+import { BOTTOM_TICKER_UPDATED_EVENT, notifyBottomTickerUpdated } from "../news/ticker";
+import type { NewsItem } from "../news/types";
 
-const placeholderPanels = [
-  {
-    label: "HOT TREND",
-    title: "等待趋势采样",
-    copy: "5分钟窗口 · Reddit / zhibo8",
-    size: "large",
-    states: ["sampling", "queue idle", "waiting next window", "trend queue active"],
-  },
-  {
-    label: "FAN MOOD",
-    title: "等待评论情绪",
-    copy: "高频表达 / 球迷吐槽",
-    size: "medium",
-    states: ["312 replies indexed", "comment window active", "queue idle"],
-  },
-  {
-    label: "POST IDEAS",
-    title: "等待候选文案",
-    copy: "短句 / 角度 / 微博素材",
-    size: "small",
-    states: ["waiting publishable angle", "draft queue idle", "angle scan pending"],
-  },
-];
+const getDisplayTitle = (item: NewsItem) => item.translatedTitle || item.title;
+const getOriginalLink = (item: NewsItem) => item.url || item.externalUrl || "";
+const buildExportText = (items: NewsItem[]) =>
+  items
+    .map((item, index) => {
+      const link = getOriginalLink(item);
+      return [`${index + 1}. ${getDisplayTitle(item)}`, link ? `链接：${link}` : "链接：暂无"].join("\n");
+    })
+    .join("\n\n");
 
 export default function EditorDesk() {
-  const [stateIndex, setStateIndex] = useState(0);
-  const maxStateCount = useMemo(() => Math.max(...placeholderPanels.map((panel) => panel.states.length)), []);
+  const [items, setItems] = useState<NewsItem[]>(() => readStoredNewsItems());
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
+  const refreshSelection = useCallback(() => {
+    setItems(readStoredNewsItems());
+  }, []);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setStateIndex((current) => (current + 1) % maxStateCount);
-    }, 9000);
+    refreshSelection();
 
-    return () => window.clearInterval(intervalId);
-  }, [maxStateCount]);
+    window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshSelection);
+    window.addEventListener("storage", refreshSelection);
+
+    return () => {
+      window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshSelection);
+      window.removeEventListener("storage", refreshSelection);
+    };
+  }, [refreshSelection]);
+
+  const selectedItems = items.filter((item) => item.pinned).slice(0, MAX_PINNED_NEWS);
+  const exportText = buildExportText(selectedItems);
+
+  const removeSelectedItem = (target: NewsItem) => {
+    const nextItems = items.map((item) => (item.id === target.id ? { ...item, pinned: false } : item));
+    const nextPinnedIds = nextItems.filter((item) => item.pinned).map((item) => item.id);
+
+    savePinnedNewsIds(nextPinnedIds);
+    saveNewsItems(nextItems);
+    notifyBottomTickerUpdated();
+    setItems(nextItems);
+  };
 
   return (
-    <aside className="panel editor-desk" aria-label="Editor workspace placeholder">
-      <div className="panel-title-row">
+    <aside className="panel editor-desk selected-desk" aria-label="精选内容">
+      <div className="panel-title-row selected-title-row">
         <div>
-          <h2>编辑工作台</h2>
-          <span className="eyebrow">EDITOR DESK</span>
+          <h2>精选内容</h2>
+          <span className="eyebrow">SELECTED</span>
         </div>
-        <span className="desk-state">queue idle</span>
+        <div className="selected-title-actions">
+          <button disabled={selectedItems.length === 0} onClick={() => setIsExportOpen(true)} type="button">
+            导出
+          </button>
+          <span className="desk-state">{selectedItems.length}/{MAX_PINNED_NEWS}</span>
+        </div>
       </div>
-      <div className="editor-desk-scroll">
-        {placeholderPanels.map((panel) => (
-          <section className={`editor-placeholder-panel ${panel.size}`} key={panel.label}>
-            <div className="editor-placeholder-head">
-              <span>{panel.label}</span>
-              <em>{panel.states[stateIndex % panel.states.length]}</em>
+
+      <div className="editor-desk-scroll selected-scroll">
+        {selectedItems.length > 0 ? (
+          <ol className="selected-list">
+            {selectedItems.map((item, index) => (
+              <li className="selected-item" key={item.id}>
+                <span className="selected-index">{String(index + 1).padStart(2, "0")}</span>
+                {item.url ? (
+                  <a className="selected-title" href={item.url} rel="noopener noreferrer" target="_blank">
+                    {getDisplayTitle(item)}
+                  </a>
+                ) : (
+                  <span className="selected-title">{getDisplayTitle(item)}</span>
+                )}
+                <button
+                  aria-label="取消精选"
+                  className="selected-star-button active"
+                  onClick={() => removeSelectedItem(item)}
+                  title="取消精选"
+                  type="button"
+                >
+                  ★
+                </button>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <div className="selected-empty">
+            <strong>等待精选</strong>
+            <span>点击第四栏消息星星后，标题会同步到这里。</span>
+          </div>
+        )}
+      </div>
+      {isExportOpen && (
+        <div className="selected-export-backdrop" role="presentation" onClick={() => setIsExportOpen(false)}>
+          <section
+            aria-label="导出精选内容"
+            aria-modal="true"
+            className="selected-export-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="selected-export-head">
+              <div>
+                <h3>导出精选内容</h3>
+                <span>{selectedItems.length} 条 · 纯文本</span>
+              </div>
+              <button aria-label="关闭导出窗口" onClick={() => setIsExportOpen(false)} type="button">
+                ×
+              </button>
             </div>
-            <strong>{panel.title}</strong>
-            <p>{panel.copy}</p>
+            <textarea readOnly value={exportText} />
           </section>
-        ))}
-      </div>
+        </div>
+      )}
     </aside>
   );
 }

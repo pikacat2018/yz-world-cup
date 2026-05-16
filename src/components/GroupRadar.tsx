@@ -17,11 +17,10 @@ export default function GroupRadar({ selectedGroupId, onSelectGroup }: GroupRada
     <aside className="panel group-radar">
       <div className="panel-title-row">
         <div>
-          <span className="eyebrow">GROUP RADAR</span>
           <h2>小组雷达</h2>
         </div>
         <div className="radar-actions">
-          <div className="group-letter-grid compact" aria-label="小组字母导航">
+          <div className="group-letter-grid compact" aria-label="小组导航">
             {groups.map((group) => (
               <button
                 aria-pressed={selectedGroupId === group.id}

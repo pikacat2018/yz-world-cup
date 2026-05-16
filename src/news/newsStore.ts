@@ -11,7 +11,7 @@ export const NEWS_FEED_CONFIG = {
   initialVisibleCount: 40,
   loadMoreCount: 20,
   maxStoredItems: 10_000,
-  pinnedLimit: 10,
+  pinnedLimit: 30,
 };
 export const SOURCE_REFRESH_CONFIG = {
   zhibo8: 90_000,
@@ -43,7 +43,31 @@ const isDateOnlyPublishedAt = (value?: string) => {
   return !Number.isNaN(date.getTime()) && date.getUTCHours() === 16 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
 };
 
+const mergeRedditSourceVariant = (existing?: NewsItem["sourceVariant"], incoming?: NewsItem["sourceVariant"]) => {
+  const variants = new Set([...(existing?.split(",") ?? []), ...(incoming?.split(",") ?? [])]);
+  const hasHot = variants.has("hot");
+  const hasNew = variants.has("new");
+
+  if (hasHot && hasNew) return "hot,new";
+  if (hasHot) return "hot";
+  if (hasNew) return "new";
+  return existing ?? incoming;
+};
+
 const mergeStableNewsItem = (existing: NewsItem, incoming: NewsItem): NewsItem => {
+  if (existing.source === "reddit" && incoming.source === "reddit") {
+    const sourceVariant = mergeRedditSourceVariant(existing.sourceVariant, incoming.sourceVariant);
+
+    return {
+      ...existing,
+      sourceVariant,
+      score: Math.max(existing.score ?? 0, incoming.score ?? 0) || existing.score || incoming.score,
+      comments: Math.max(existing.comments ?? 0, incoming.comments ?? 0) || existing.comments || incoming.comments,
+      priority: Math.max(existing.priority ?? 0, incoming.priority ?? 0),
+      fetchedAt: parseSortTime(incoming.fetchedAt) > parseSortTime(existing.fetchedAt) ? incoming.fetchedAt : existing.fetchedAt,
+    };
+  }
+
   if (isDateOnlyPublishedAt(existing.publishedAt) && incoming.publishedAt && !isDateOnlyPublishedAt(incoming.publishedAt)) {
     return {
       ...existing,
