@@ -11,6 +11,7 @@ export type NewsItem = {
   url?: string;
   externalUrl?: string;
   publishedAt?: string;
+  collectedAt?: string;
   fetchedAt: string;
   pinned: boolean;
   category?: "football";

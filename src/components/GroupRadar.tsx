@@ -1,4 +1,5 @@
 import { groups } from "../data/mockWorldCup";
+import MatchImpact from "./MatchImpact";
 import StandingsTable from "./StandingsTable";
 
 type GroupRadarProps = {
@@ -34,12 +35,15 @@ export default function GroupRadar({ selectedGroupId, onSelectGroup }: GroupRada
             ))}
           </div>
           <button className="overview-button" onClick={openAllGroups} type="button">
-            全部小组
+            全
           </button>
         </div>
       </div>
       <div className="radar-summary-card">
         <StandingsTable standings={selectedGroup.standings} />
+        <div className="radar-match-list" aria-label={`${selectedGroup.id}组比赛`}>
+          <MatchImpact group={selectedGroup} />
+        </div>
       </div>
     </aside>
   );

@@ -12,6 +12,10 @@ const OLD_REDDIT_BASE_URL = "https://old.reddit.com";
 const REDDIT_FETCH_LIMIT = 20;
 
 type RedditListingVariant = "hot" | "new";
+type CollectRedditOptions = {
+  forceRefresh?: boolean;
+  variant?: RedditListingVariant;
+};
 
 const redditRequestHeaders = {
   "User-Agent":
@@ -340,8 +344,12 @@ const isNewsItem = (value: unknown): value is NewsItem => {
   );
 };
 
-export async function collectReddit(subreddit = "soccer"): Promise<NewsItem[]> {
-  const response = await fetch(`${LOCAL_REDDIT_COLLECT_URL}?subreddit=${encodeURIComponent(subreddit)}`, {
+export async function collectReddit(subreddit = "soccer", options: CollectRedditOptions = {}): Promise<NewsItem[]> {
+  const params = new URLSearchParams({ subreddit });
+  if (options.forceRefresh) params.set("force", "1");
+  if (options.variant) params.set("variant", options.variant);
+
+  const response = await fetch(`${LOCAL_REDDIT_COLLECT_URL}?${params.toString()}`, {
     mode: "same-origin",
   });
 
@@ -500,9 +508,9 @@ export function fallbackToMockReddit(): NewsItem[] {
   return [];
 }
 
-export async function fetchRedditSoccer(): Promise<NewsItem[]> {
+export async function fetchRedditSoccer(options: CollectRedditOptions = {}): Promise<NewsItem[]> {
   try {
-    const collectedItems = await collectReddit();
+    const collectedItems = await collectReddit("soccer", options);
     if (collectedItems.length > 0) return mergeRedditHotAndNew(collectedItems);
   } catch (error) {
     logRedditStatus("axios collector failed", describeFetchFailure(error));
@@ -516,6 +524,6 @@ export async function fetchRedditSoccer(): Promise<NewsItem[]> {
   return htmlItems.length > 0 ? htmlItems : fallbackToMockReddit();
 }
 
-export async function fetchRedditNews(): Promise<NewsItem[]> {
-  return fetchRedditSoccer();
+export async function fetchRedditNews(options: CollectRedditOptions = {}): Promise<NewsItem[]> {
+  return fetchRedditSoccer(options);
 }

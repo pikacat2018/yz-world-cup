@@ -4,7 +4,7 @@ import { isZhibo8FootballByUrl } from "../footballFilter";
 const ZHIBO8_NEWS_URL = "https://m.zhibo8.com/news.htm";
 const ZHIBO8_BASE_URL = "https://m.zhibo8.com";
 const ZHIBO8_WEB_NEWS_BASE_URL = "https://news.zhibo8.com";
-const ZHIBO8_LATEST_NEWS_LIMIT = 60;
+const ZHIBO8_LATEST_NEWS_LIMIT = 900;
 const ZHIBO8_DETAIL_TIME_CONCURRENCY = 8;
 
 export function normalizeZhibo8Url(href: string): string {
@@ -64,8 +64,8 @@ const parseChineseLocalTime = (value: string, fetchedAt: string) => {
 const parsePublishedAt = (text: string, fetchedAt: string, url = "") => {
   const fullDateMatch = text.match(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\s+\d{1,2}:\d{2}/);
   const shortDateMatch = text.match(/\b\d{1,2}[-/.]\d{1,2}\s+\d{1,2}:\d{2}\b/);
-  const relativeMinuteMatch = text.match(/(\d+)\s*分钟/);
-  const relativeHourMatch = text.match(/(\d+)\s*小时/);
+  const relativeMinuteMatch = text.match(/(\d+)\s*分钟前/);
+  const relativeHourMatch = text.match(/(\d+)\s*小时前/);
   const urlDate = parsePublishedAtFromUrl(url);
   const toRelativeIso = (amount: number, unitMs: number) => {
     const fetchedTime = new Date(fetchedAt).getTime();
@@ -84,7 +84,7 @@ const parsePublishedAt = (text: string, fetchedAt: string, url = "") => {
 
   if (relativeMinuteMatch) return toRelativeIso(Number(relativeMinuteMatch[1]), 60 * 1000);
   if (relativeHourMatch) return toRelativeIso(Number(relativeHourMatch[1]), 60 * 60 * 1000);
-  if (text.includes("刚刚")) return fetchedAt;
+  if (/(刚刚|刚才)/.test(text)) return fetchedAt;
   if (urlDate) return urlDate;
 
   return fetchedAt;
@@ -102,6 +102,15 @@ const isDateOnlyTimestamp = (value: string) => {
 
   return !Number.isNaN(date.getTime()) && date.getUTCHours() === 16 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
 };
+
+const isFetchedAtTimestamp = (publishedAt: string, fetchedAt: string) => {
+  const publishedTime = new Date(publishedAt).getTime();
+  const fetchedTime = new Date(fetchedAt).getTime();
+
+  return !Number.isNaN(publishedTime) && !Number.isNaN(fetchedTime) && Math.abs(publishedTime - fetchedTime) <= 5_000;
+};
+
+const isRelativeListTimeText = (value: string) => /(\d+)\s*(?:分钟|小时)前|刚刚|刚才/.test(value);
 
 const fetchZhibo8DetailPublishedAt = async (url: string, fetchedAt: string) => {
   try {
@@ -125,7 +134,7 @@ const fetchZhibo8DetailPublishedAt = async (url: string, fetchedAt: string) => {
   }
 };
 
-const applyDetailPublishedTimes = async (items: NewsItem[]) => {
+const applyDetailPublishedTimes = async (items: NewsItem[], detailTimeRepairIds = new Set<string>()) => {
   const nextItems = [...items];
   let cursor = 0;
 
@@ -135,7 +144,15 @@ const applyDetailPublishedTimes = async (items: NewsItem[]) => {
       cursor += 1;
 
       const item = nextItems[index];
-      if (!item.url || !item.publishedAt || !isDateOnlyTimestamp(item.publishedAt)) continue;
+      if (
+        !item.url ||
+        !item.publishedAt ||
+        (!detailTimeRepairIds.has(item.id) &&
+          !isDateOnlyTimestamp(item.publishedAt) &&
+          !isFetchedAtTimestamp(item.publishedAt, item.fetchedAt))
+      ) {
+        continue;
+      }
 
       const detailPublishedAt = await fetchZhibo8DetailPublishedAt(item.url, item.fetchedAt);
       if (!detailPublishedAt) continue;
@@ -174,6 +191,7 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
   const fetchedAt = new Date().toISOString();
 
   const items: NewsItem[] = [];
+  const detailTimeRepairIds = new Set<string>();
 
   for (const row of latestRows) {
     const link = row.querySelector("h2 a") ?? row.querySelector("a[href]");
@@ -184,6 +202,7 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
     const href = link.getAttribute("href") ?? "";
     const url = normalizeZhibo8Url(href) || undefined;
     const surroundingText = row.textContent?.replace(/\s+/g, " ").trim() ?? title;
+    const timeText = surroundingText.replace(title, " ").replace(/\s+/g, " ").trim();
 
     if (title.length >= 8) {
       if (!url) continue;
@@ -191,10 +210,11 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
 
       const webUrl = toZhibo8WebUrl(url);
       if (!webUrl || !isZhibo8FootballByUrl(webUrl)) continue;
-      const publishedAt = parsePublishedAt(surroundingText, fetchedAt, webUrl);
+      const publishedAt = parsePublishedAt(timeText, fetchedAt, webUrl);
+      const id = createNewsId("zhibo8", title, webUrl);
 
       items.push({
-        id: createNewsId("zhibo8", title, webUrl),
+        id,
         source: "zhibo8",
         title,
         url: webUrl,
@@ -206,8 +226,9 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
         sourcePinned: false,
         pinned: false,
       });
+      if (isRelativeListTimeText(timeText)) detailTimeRepairIds.add(id);
     }
   }
 
-  return applyDetailPublishedTimes(items.slice(0, ZHIBO8_LATEST_NEWS_LIMIT));
+  return applyDetailPublishedTimes(items.slice(0, ZHIBO8_LATEST_NEWS_LIMIT), detailTimeRepairIds);
 }

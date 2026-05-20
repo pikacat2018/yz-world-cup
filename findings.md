@@ -13,3 +13,10 @@
 - `Layout.tsx` owns the bottom ticker slot, while `MessagePanel` owns current news state and pin/unpin actions.
 - `savePinnedNewsIds` persists pinned ids, but pin/unpin currently does not save the updated `NewsItem.pinned` values to `NEWS_ITEMS_STORAGE_KEY`; a same-tab event is needed because browser `storage` events do not fire in the same tab that writes localStorage.
 - Existing app shell is fixed at `48px / main / 40px`; bottom ticker must stay inside the existing 40px row.
+
+# Today Follow-Up v1 Findings
+
+- `EditorDesk` currently reads pinned `NewsItem`s directly from `readStoredNewsItems()` and removes selections by clearing `pinned`/`sourcePinned`.
+- `MessagePanel` already saves pinned news items and emits `BOTTOM_TICKER_UPDATED_EVENT`; the third column can listen to the same event and migrate newly pinned items into follow-up storage.
+- The existing `BottomTicker` component exists but is not mounted in `App.tsx`/`Layout.tsx`; this task should not depend on it.
+- Existing CSS already has third-column selected-list/source-strip/export styles that can be extended rather than replacing the dashboard layout.

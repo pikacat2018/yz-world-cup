@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import AllGroupsOverview from "./components/AllGroupsOverview";
 import AllSchedulePage from "./components/AllSchedulePage";
 import Layout from "./components/Layout";
@@ -41,15 +41,9 @@ export default function App() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  const selectedGroup = useMemo(
-    () => groups.find((group) => group.id === selectedGroupId) ?? groups[0],
-    [selectedGroupId],
-  );
-
   return (
     <Layout
       onThemeChange={setTheme}
-      selectedGroup={selectedGroup}
       selectedGroupId={selectedGroupId}
       theme={theme}
       onSelectGroup={setSelectedGroupId}

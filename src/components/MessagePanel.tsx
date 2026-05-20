@@ -2,6 +2,7 @@ import { type CSSProperties, type UIEvent, useCallback, useEffect, useMemo, useR
 import {
   fetchLatestNews,
   loadNewsFeed,
+  markRedditHotSeen,
   markNewsIdRead,
   MAX_PINNED_NEWS,
   mergeNewsItems,
@@ -10,11 +11,7 @@ import {
   saveNewsItems,
   savePinnedNewsIds,
 } from "../news/newsStore";
-import {
-  applyCachedRedditTranslations,
-  translateMissingRedditItems,
-  translateNewRedditItems,
-} from "../news/redditTranslations";
+import { RECENT_KEYWORD_SEARCH_EVENT, type RecentKeywordSearchDetail } from "../news/recentKeywords";
 import { sourceColors } from "../news/sourceColors";
 import { BOTTOM_TICKER_UPDATED_EVENT, notifyBottomTickerUpdated } from "../news/ticker";
 import type { NewsItem } from "../news/types";
@@ -120,6 +117,7 @@ export default function MessagePanel() {
   const [visibleCount, setVisibleCount] = useState(NEWS_FEED_CONFIG.initialVisibleCount);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [externalSearchTerms, setExternalSearchTerms] = useState<string[]>([]);
   const [isFetching, setIsFetching] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
@@ -128,7 +126,6 @@ export default function MessagePanel() {
   const [cooldownNow, setCooldownNow] = useState(Date.now());
   const isFetchingRef = useRef(false);
   const isLoadingMoreRef = useRef(false);
-  const isTranslatingExistingRef = useRef(false);
   const itemsRef = useRef<NewsItem[]>([]);
 
   useEffect(() => {
@@ -149,6 +146,18 @@ export default function MessagePanel() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeywordSearch = (event: Event) => {
+      const { keyword, terms } = (event as CustomEvent<RecentKeywordSearchDetail>).detail;
+      setSearchQuery(keyword);
+      setExternalSearchTerms(terms);
+    };
+
+    window.addEventListener(RECENT_KEYWORD_SEARCH_EVENT, handleKeywordSearch);
+
+    return () => window.removeEventListener(RECENT_KEYWORD_SEARCH_EVENT, handleKeywordSearch);
+  }, []);
+
   const syncNews = useCallback(async (mode: "auto" | "manual" | "initial") => {
     if (isFetchingRef.current) return;
 
@@ -163,7 +172,7 @@ export default function MessagePanel() {
     try {
       if (mode === "initial") {
         const feed = await loadNewsFeed();
-        setItems(applyCachedRedditTranslations(feed.items));
+        setItems(feed.items);
         notifyBottomTickerUpdated();
         setHasFetchError(feed.errors.length > 0);
         setFetchStatus(feed.usingMock ? "failed" : "idle");
@@ -171,20 +180,13 @@ export default function MessagePanel() {
         setVisibleCount(NEWS_FEED_CONFIG.initialVisibleCount);
         if (!feed.usingMock) setLastUpdatedAt(new Date());
         if (feed.usingMock) setNotice("拉取失败，稍后重试");
-        if (feed.items.length > 0) {
-          window.setTimeout(() => {
-            void syncNews("auto");
-          }, 800);
-        }
         return;
       }
 
       setLastUpdatedAt(new Date());
       const incoming = await fetchLatestNews();
-      const currentItems = itemsRef.current;
-      const translatedIncoming = await translateNewRedditItems(incoming, currentItems);
       setItems((current) => {
-        const merged = mergeNewsItems(current, translatedIncoming);
+        const merged = mergeNewsItems(current, incoming);
         setLastAddedCount(merged.addedCount);
         setFetchStatus(merged.addedCount > 0 ? "added" : "empty");
         notifyBottomTickerUpdated();
@@ -204,45 +206,6 @@ export default function MessagePanel() {
   useEffect(() => {
     void syncNews("initial");
   }, [syncNews]);
-
-  useEffect(() => {
-    if (items.length === 0 || isTranslatingExistingRef.current) return;
-    if (!items.some((item) => item.source === "reddit" && !item.translatedTitle)) return;
-
-    isTranslatingExistingRef.current = true;
-    void translateMissingRedditItems(items, 20)
-      .then((translatedItems) => {
-        const translatedById = new Map(translatedItems.map((item) => [item.id, item]));
-        let changed = false;
-
-        setItems((current) => {
-          const nextItems = current.map((item) => {
-            const translatedItem = translatedById.get(item.id);
-
-            if (!translatedItem?.translatedTitle || item.translatedTitle === translatedItem.translatedTitle) {
-              return item;
-            }
-
-            changed = true;
-            return {
-              ...item,
-              translatedTitle: translatedItem.translatedTitle,
-              translatedAt: translatedItem.translatedAt,
-            };
-          });
-
-          if (changed) {
-            saveNewsItems(nextItems);
-            notifyBottomTickerUpdated();
-          }
-
-          return nextItems;
-        });
-      })
-      .finally(() => {
-        isTranslatingExistingRef.current = false;
-      });
-  }, [items]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -270,11 +233,19 @@ export default function MessagePanel() {
   const { normal, pinned } = useMemo(() => splitNews(items), [items]);
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const isSearching = normalizedSearchQuery.length > 0;
+  const normalizedExternalSearchTerms = useMemo(
+    () => externalSearchTerms.map(normalizeSearchText).filter(Boolean),
+    [externalSearchTerms],
+  );
   const searchResults = useMemo(() => {
     if (!normalizedSearchQuery) return [];
 
-    return items.filter((item) => normalizeSearchText(getSearchText(item)).includes(normalizedSearchQuery));
-  }, [items, normalizedSearchQuery]);
+    const searchTerms = normalizedExternalSearchTerms.length > 0 ? normalizedExternalSearchTerms : [normalizedSearchQuery];
+    return items.filter((item) => {
+      const searchText = normalizeSearchText(getSearchText(item));
+      return searchTerms.some((term) => searchText.includes(term));
+    });
+  }, [items, normalizedExternalSearchTerms, normalizedSearchQuery]);
   const visibleNormal = normal.slice(0, visibleCount);
   const hasMoreNormal = visibleCount < normal.length;
   const hasNews = isSearching ? searchResults.length > 0 : normal.length > 0;
@@ -316,9 +287,18 @@ export default function MessagePanel() {
       return;
     }
 
-    const nextItems = items.map((item) => (item.id === target.id ? { ...item, pinned: !item.pinned } : item));
+    const nextItems = items.map((item) =>
+      item.id === target.id
+        ? {
+            ...item,
+            pinned: !item.pinned,
+            sourcePinned: item.pinned ? false : item.sourcePinned,
+          }
+        : item,
+    );
     const nextPinnedIds = nextItems.filter((item) => item.pinned).map((item) => item.id);
 
+    if (target.pinned) markRedditHotSeen(target);
     savePinnedNewsIds(nextPinnedIds);
     saveNewsItems(nextItems);
     notifyBottomTickerUpdated();
@@ -365,9 +345,10 @@ export default function MessagePanel() {
             : "";
   const fetchButtonText = isFetching ? "拉取中..." : isCoolingDown ? "请稍后" : "拉取";
   const isFetchButtonDisabled = isFetching || isCoolingDown;
+  const feedStatusText = notice || (isLoading ? "加载中..." : "");
 
   return (
-    <section className="message-panel" aria-label="实时消息流">
+    <section className={feedStatusText ? "message-panel has-feed-status" : "message-panel"} aria-label="实时消息流">
       <div className="message-title">
         <div className="message-title-copy">
           <span className="eyebrow">NEWS FEED</span>
@@ -387,7 +368,10 @@ export default function MessagePanel() {
         </span>
         <input
           aria-label="搜索已抓取消息"
-          onChange={(event) => setSearchQuery(event.target.value)}
+          onChange={(event) => {
+            setSearchQuery(event.target.value);
+            setExternalSearchTerms([]);
+          }}
           placeholder="搜索全部已抓取消息"
           type="search"
           value={searchQuery}
@@ -396,9 +380,11 @@ export default function MessagePanel() {
           {isSearching ? `${searchResults.length}/${items.length}` : `${items.length}`}
         </span>
       </label>
-      <div className="news-feed-status" aria-live="polite">
-        {notice || (isLoading ? "加载中..." : "")}
-      </div>
+      {feedStatusText ? (
+        <div className="news-feed-status" aria-live="polite">
+          {feedStatusText}
+        </div>
+      ) : null}
       <div className="news-feed-scroll" onScroll={handleFeedScroll}>
         {isSearching ? (
           <section className="news-feed-section news-search-results" aria-label="搜索结果">

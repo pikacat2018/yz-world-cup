@@ -30,14 +30,13 @@ const DEFAULT_REDDIT_SUBREDDIT = "soccer";
 const DEFAULT_REDDIT_PROXY_URL = "http://127.0.0.1:7897";
 const REQUEST_TIMEOUT_MS = 25_000;
 const RETRY_DELAYS_MS = [0, 800, 1600];
-let deepseekAuthBlockedUntil = 0;
-let hasLoggedDeepSeekConfig = false;
 const REDDIT_COLLECT_CACHE_MS = 75_000;
 const REDDIT_JSON_FAILURE_COOLDOWN_MS = 5 * 60_000;
 let redditJsonBlockedUntil = 0;
 let redditCollectCache:
   | {
       timestamp: number;
+      cacheKey: string;
       subreddit: string;
       result: { items: ServerNewsItem[]; source: string; proxyUrl: string };
     }
@@ -211,12 +210,6 @@ const redditAtomUrls = (subreddit: string, variant: RedditVariant) =>
     ? [`https://www.reddit.com/r/${subreddit}/new/.rss`, `https://old.reddit.com/r/${subreddit}/new/.rss`]
     : [`https://www.reddit.com/r/${subreddit}/.rss`, `https://old.reddit.com/r/${subreddit}/.rss`];
 
-const maskSecret = (value: string) => {
-  if (!value) return "";
-  if (value.length <= 8) return `${value.slice(0, 2)}***${value.slice(-2)}`;
-  return `${value.slice(0, 4)}***${value.slice(-4)}`;
-};
-
 const zhibo8HtmlHeaders = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) football-monitor/0.1",
   Accept: "text/html,application/xhtml+xml",
@@ -237,18 +230,6 @@ const isAllowedZhibo8DetailUrl = (value: string) => {
     return false;
   }
 };
-
-const normalizeDeepSeekBaseUrl = (value?: string) => {
-  const rawValue = value?.trim() || "https://api.deepseek.com";
-  let normalized = rawValue.replace(/\/+$/, "");
-
-  normalized = normalized.replace(/\/chat\/completions$/i, "");
-  normalized = normalized.replace(/\/v1$/i, "");
-
-  return normalized || "https://api.deepseek.com";
-};
-
-const getDeepSeekRequestUrl = (baseUrl?: string) => `${normalizeDeepSeekBaseUrl(baseUrl)}/chat/completions`;
 
 const readLocalEnvFile = (root: string) => {
   const envPath = resolve(root, ".env");
@@ -276,39 +257,6 @@ const readLocalEnvFile = (root: string) => {
       env[key] = value;
       return env;
     }, {});
-};
-
-const logDeepSeekConfig = (apiKey: string, baseUrl: string, model: string, requestUrl: string) => {
-  if (hasLoggedDeepSeekConfig) return;
-  hasLoggedDeepSeekConfig = true;
-
-  console.info(
-    `[deepseek] api key loaded: ${Boolean(apiKey)}, length: ${apiKey.length}, masked: ${maskSecret(apiKey)}`,
-  );
-  console.info(`[deepseek] base url: ${baseUrl}`);
-  console.info(`[deepseek] model: ${model}`);
-  console.info(`[deepseek] request url: ${requestUrl}`);
-};
-
-const cleanTranslatedTitle = (value: string) =>
-  value
-    .trim()
-    .replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, "")
-    .replace(/^中文标题[:：]\s*/i, "")
-    .replace(/^翻译[:：]\s*/i, "")
-    .replace(/\s+/g, " ");
-
-const looksLikeIncompleteTranslation = (sourceTitle: string, translatedTitle: string) => {
-  const compactTranslation = translatedTitle.replace(/\s+/g, "");
-  const cjkLength = (compactTranslation.match(/[\u4e00-\u9fff]/g) ?? []).length;
-
-  if (compactTranslation.length < 4 || cjkLength < 2) return true;
-  if (sourceTitle.length >= 40 && compactTranslation.length < 10) return true;
-  if (sourceTitle.length >= 35 && compactTranslation.length < 14 && /[\u4e00-\u9fff]$/.test(compactTranslation)) {
-    return true;
-  }
-
-  return false;
 };
 
 const fetchTextWithRetry = async (
@@ -491,83 +439,16 @@ const mergeRedditItems = (items: ServerNewsItem[]) => {
   return Array.from(byId.values());
 };
 
-async function translateRedditTitle(title: string) {
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!apiKey) {
-    console.warn("[deepseek] missing DEEPSEEK_API_KEY, skip translation");
-    return null;
-  }
-  if (Date.now() < deepseekAuthBlockedUntil) return null;
-
-  const baseUrl = normalizeDeepSeekBaseUrl(process.env.DEEPSEEK_BASE_URL);
-  const model = process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat";
-  const requestUrl = getDeepSeekRequestUrl(baseUrl);
-
-  logDeepSeekConfig(apiKey, baseUrl, model, requestUrl);
-
-  try {
-    const response = await axios.post(
-      requestUrl,
-      {
-        model,
-        messages: [
-          {
-            role: "system",
-            content:
-              "你是足球新闻标题翻译助手。请把英文 Reddit 足球帖子标题翻译成自然、简洁的中文新闻标题。保留人名、球队名、记者名、标签名和常见足球术语。不要解释，不要加引号，不要输出多余内容。",
-          },
-          {
-            role: "system",
-            content:
-              "You translate football Reddit post titles into natural, concise Simplified Chinese sports-news headlines. Keep names, club names, journalist/source tags such as [Romano] and [Official], scores, dates, currencies, and common football terms. Do not explain. Do not add quotes. Output one complete Chinese headline only.",
-          },
-          {
-            role: "user",
-            content: `Translate this football Reddit title into Simplified Chinese. Return only the translated title, complete and not truncated:\n${title}`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 600,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 25_000,
-      },
-    );
-    const translated = response.data?.choices?.[0]?.message?.content;
-    const cleaned = typeof translated === "string" ? cleanTranslatedTitle(translated) : "";
-
-    if (!cleaned || looksLikeIncompleteTranslation(title, cleaned)) {
-      console.warn("[deepseek] dropped incomplete title translation");
-      return null;
-    }
-
-    return cleaned;
-
-    return typeof translated === "string" ? translated.trim().replace(/^["“”]+|["“”]+$/g, "") : null;
-  } catch (error) {
-    const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-
-    if (status === 401) {
-      deepseekAuthBlockedUntil = Date.now() + 5 * 60 * 1000;
-      console.warn(
-        "[deepseek] 401 Unauthorized: check API key, Authorization header, base URL, and account status",
-      );
-      return null;
-    }
-
-    console.warn("[deepseek] title translation failed", error instanceof Error ? error.message : "unknown error");
-    return null;
-  }
-}
-
-async function collectReddit(subreddit = DEFAULT_REDDIT_SUBREDDIT, options: { proxyUrl?: string | null } = {}) {
+async function collectReddit(
+  subreddit = DEFAULT_REDDIT_SUBREDDIT,
+  options: { proxyUrl?: string | null; forceRefresh?: boolean; variants?: RedditVariant[] } = {},
+) {
   const now = Date.now();
+  const cacheKey = `${subreddit}:${options.variants?.join(",") || "new,hot"}`;
   if (
+    !options.forceRefresh &&
     redditCollectCache &&
+    redditCollectCache.cacheKey === cacheKey &&
     redditCollectCache.subreddit === subreddit &&
     now - redditCollectCache.timestamp < REDDIT_COLLECT_CACHE_MS
   ) {
@@ -575,7 +456,7 @@ async function collectReddit(subreddit = DEFAULT_REDDIT_SUBREDDIT, options: { pr
     return redditCollectCache.result;
   }
 
-  if (redditCollectInFlight) {
+  if (!options.forceRefresh && redditCollectInFlight) {
     console.info("[reddit] joining in-flight collect request");
     return redditCollectInFlight;
   }
@@ -583,7 +464,7 @@ async function collectReddit(subreddit = DEFAULT_REDDIT_SUBREDDIT, options: { pr
   redditCollectInFlight = collectRedditUncached(subreddit, options)
     .then((result) => {
       if (result.items.length > 0) {
-        redditCollectCache = { timestamp: Date.now(), subreddit, result };
+        redditCollectCache = { timestamp: Date.now(), cacheKey, subreddit, result };
       }
 
       return result;
@@ -595,9 +476,12 @@ async function collectReddit(subreddit = DEFAULT_REDDIT_SUBREDDIT, options: { pr
   return redditCollectInFlight;
 }
 
-async function collectRedditUncached(subreddit = DEFAULT_REDDIT_SUBREDDIT, options: { proxyUrl?: string | null } = {}) {
+async function collectRedditUncached(
+  subreddit = DEFAULT_REDDIT_SUBREDDIT,
+  options: { proxyUrl?: string | null; variants?: RedditVariant[] } = {},
+) {
   const proxyUrl = normalizeProxyUrl(options.proxyUrl ?? undefined) || getProxyUrl();
-  const variants: RedditVariant[] = ["new", "hot"];
+  const variants: RedditVariant[] = options.variants?.length ? options.variants : ["new", "hot"];
   const jsonItems: ServerNewsItem[] = [];
 
   if (Date.now() < redditJsonBlockedUntil) {
@@ -658,9 +542,13 @@ const redditProxyPlugin = () => ({
     server.middlewares.use("/api/reddit/collect", async (request, response) => {
       const url = new URL(request.url ?? "", "http://localhost");
       const subreddit = url.searchParams.get("subreddit") || process.env.REDDIT_SUBREDDIT || DEFAULT_REDDIT_SUBREDDIT;
+      const forceRefresh = ["1", "true", "yes"].includes((url.searchParams.get("force") ?? "").toLowerCase());
+      const requestedVariant = url.searchParams.get("variant");
+      const variants: RedditVariant[] =
+        requestedVariant === "hot" || requestedVariant === "new" ? [requestedVariant] : ["new", "hot"];
 
       try {
-        const result = await collectReddit(subreddit, { proxyUrl: process.env.REDDIT_PROXY_URL });
+        const result = await collectReddit(subreddit, { forceRefresh, proxyUrl: process.env.REDDIT_PROXY_URL, variants });
 
         response.setHeader("Content-Type", "application/json");
         response.statusCode = 200;
@@ -675,44 +563,6 @@ const redditProxyPlugin = () => ({
           }),
         );
       }
-    });
-    server.middlewares.use("/api/reddit/translate-title", async (request, response) => {
-      if (request.method !== "POST") {
-        response.statusCode = 405;
-        response.end();
-        return;
-      }
-
-      const chunks: Buffer[] = [];
-      request.on("data", (chunk: Buffer) => chunks.push(chunk));
-      request.on("end", async () => {
-        try {
-          const body = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as { title?: unknown };
-          const title = typeof body.title === "string" ? body.title.trim() : "";
-
-          if (!title) {
-            response.statusCode = 400;
-            response.setHeader("Content-Type", "application/problem+json");
-            response.end(JSON.stringify({ error: "missing_title" }));
-            return;
-          }
-
-          const translatedTitle = await translateRedditTitle(title);
-
-          response.statusCode = 200;
-          response.setHeader("Content-Type", "application/json");
-          response.end(JSON.stringify({ translatedTitle }));
-        } catch (error) {
-          response.statusCode = 500;
-          response.setHeader("Content-Type", "application/problem+json");
-          response.end(
-            JSON.stringify({
-              error: "translate_title_failed",
-              reason: error instanceof Error ? error.message : "unknown translation error",
-            }),
-          );
-        }
-      });
     });
     server.middlewares.use("/api/zhibo8/detail", async (request, response) => {
       const url = new URL(request.url ?? "", "http://localhost");

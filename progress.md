@@ -43,3 +43,97 @@
 - `npm install` passed with no vulnerabilities.
 - `npm run build` passed.
 - `npm run dev -- --host 127.0.0.1` responded with HTTP 200 at `http://127.0.0.1:5173`.
+
+# Recent Keywords v1 Progress
+
+- Started third-column Recent Keywords module.
+- Re-read planning files and existing News Feed findings.
+- Ran `ui-ux-pro-max` design-system search; kept implementation aligned with existing compact editorial dashboard rather than marketing-style output.
+- Inspected `EditorDesk`, `NewsItem`, selected-list styles, and layout references.
+- Added `src/news/recentKeywords.ts` with 12-hour filtering, title selection, built-in keyword matching, simple Chinese extraction, English stopword filtering, count/latest sorting, and sample-insufficient behavior.
+- Added `collectedAt` as an optional `NewsItem` timestamp fallback field.
+- Rendered the compact "12小时关键词 / RECENT KEYWORDS" module at the bottom of `EditorDesk`.
+- Added compact third-column styles without changing `.columns` widths.
+- `npm run build` passed.
+- `npm run dev -- --host 127.0.0.1` started successfully; 5173 was occupied, so Vite selected `http://127.0.0.1:5174/` for the temporary check.
+- Browser DOM check confirmed the recent keywords panel renders, shows 10 rows with current data, and `.columns` remains `238px 310px 310px 570px`.
+- Added keyword time-range controls for 12h, 6h, 3h, and 1h; default stays 12h.
+- Updated keyword statistics utility to accept a typed hour window instead of hardcoding 12 hours.
+- `npm run build` passed after range controls.
+- Browser DOM check confirmed range buttons render with `aria-pressed` and `.columns` remains `238px 310px 310px 570px`.
+- Removed the RECENT KEYWORDS subtitle, moved sample count next to the hour heading, aliased 穆帅 to 穆里尼奥, filtered 记者/vs, and kept longer person names such as 罗马诺 from being split into 罗马.
+- `npm run build` passed after the keyword wording and extraction refinements.
+- Added FC/have/their/next/leave/season/fans/welcome to keyword stopwords and stripped reporter names 罗马诺/Romano/TA before keyword extraction.
+- Tightened keyword quality rules: media names are removed when used as attribution/reporting sources, English free extraction now keeps only entity-like all-caps acronyms, and incomplete Chinese fragments such as terms ending in 第 are filtered.
+- `npm run build` passed after the quality-filter refinements.
+- Reduced the Recent Keywords list to 6 rows and canonicalized common English/Chinese duplicate entities such as Real Madrid/皇家马德里 into 皇马.
+- `npm run build` passed after the display-limit and alias changes.
+- Added click-through from Recent Keywords to the fourth-column News Feed search, including alias-aware matching such as 皇马/皇家马德里/Real Madrid.
+- `npm run build` passed after the keyword-search interaction.
+- Changed news dedupe to use stable URLs for linked items so title edits from the source update the existing item instead of creating duplicates.
+- `npm run build` passed after the URL-dedupe change.
+- Investigated zhibo8 items whose source link was published around 03:50 but later appeared as freshly fetched around 20:40; tightened merge logic so fetch-time fallback timestamps cannot overwrite a more reliable existing published time.
+- Expanded zhibo8 detail-time repair to retry detail-page time extraction when `publishedAt` equals `fetchedAt`, and changed cache dedupe to merge duplicate URLs rather than keeping the first duplicate blindly.
+- `npm run build` passed after the timestamp repair changes.
+- Fixed zhibo8 relative-time parsing so title phrases such as "5分钟2球" or "27分钟伤退" are not misread as "5分钟前/27分钟前"; list-time parsing now excludes the title text and only accepts "分钟前/小时前/刚刚/刚才".
+- `npm run build` passed after the zhibo8 title-time parsing fix.
+- Changed the fourth-column source marker from a small dot to the same full-row-height vertical strip style used in the third column.
+- `npm run build` passed after the fourth-column source marker style update.
+- Tightened the fourth-column row column gap from 8px to 5px so the source strip sits closer to the title without changing the overall four-column layout.
+- `npm run build` passed after the fourth-column marker gap adjustment.
+- Aligned the fourth-column title cell to the start so the source strip and title behave like the third-column pair while retaining the capped title width used to keep distance from the time column.
+- `npm run build` passed after the fourth-column title alignment change.
+- Balanced the fourth-column source strip spacing by setting the row left padding and strip-to-title column gap to the same 7px value.
+- `npm run build` passed after the balanced spacing tweak.
+- Set the fourth-column source strip-to-title gap to 14px per visual tuning request.
+- `npm run build` passed after the 14px gap adjustment.
+- Added a copy button to the selected-news export modal that copies the current editable textarea contents and shows a compact status message.
+- `npm run build` passed after the export-copy addition.
+- Slightly increased the first-column "全部比赛" button font size and unified the schedule date/time color.
+- `npm run build` passed after the schedule typography tweak.
+- Updated every Fira Code-only font stack to include Noto Sans SC as the Chinese fallback, preserving Fira Code for Latin/numeric glyphs while unifying Chinese rendering.
+- `npm run build` passed after the Chinese font fallback update.
+- Updated full-schedule match-card round, stage/date/time, and venue text to use the same primary color and opacity as team names.
+- `npm run build` passed after the full-schedule card text color update.
+- Changed the selected six-match schedule view to six equal-height grid rows so the match cards fill the available vertical space.
+- `npm run build` passed after the selected schedule card height adjustment.
+- Forced the selected six-match schedule grid itself to fill the available height, with six 1fr rows and 100% card height so the bottom empty area is absorbed by the cards.
+- `npm run build` passed after the selected schedule grid fill update.
+- Replaced the selected six-match schedule grid with a vertical flex layout so each match card uses `flex: 1` and evenly absorbs the remaining vertical space.
+- `npm run build` passed after the flex fill adjustment.
+- Moved each group's six-match list into the Group Radar module below the standings table, removed the separate Group Detail render from the main dashboard column, and made the radar match list fill its remaining space.
+- `npm run build` passed after moving group matches into Group Radar.
+- Matched the Group Radar match-row background to the standings area and changed the match score into a compact solid accent pill like the provided screenshot.
+- `npm run build` passed after the Group Radar match card background and score style update.
+- Restored the Group Radar score badge dimensions/format to the previous style while keeping the new solid accent background and dark text color.
+- `npm run build` passed after restoring the score badge format.
+- Applied the same solid accent score color treatment to the first-column schedule queue score boxes without changing their dimensions.
+- `npm run build` passed after the schedule queue score color update.
+- Reverted the first-column schedule queue score boxes back to the previous outlined/subtle background format while keeping the Group Radar score treatment.
+- `npm run build` passed after reverting the schedule queue score style.
+- Added a dedicated muted-gold score treatment for the first-column schedule queue: stronger than the original outline, darker than the solid accent version.
+- `npm run build` passed after the muted schedule queue score color update.
+- Increased Group Radar standings row vertical padding and tightened the embedded six-match list spacing so the standings and match cards feel more balanced while match-card heights remain equal.
+- `npm run build` passed after one transient Vite/Rolldown Windows HTML emit failure succeeded on retry.
+
+# Today Follow-Up v1 Progress
+
+- Started implementation of the date-based "今日跟进" third-column workspace.
+- Re-read planning files and inspected `EditorDesk`, `newsStore`, ticker wiring, and selected-list styles.
+- Confirmed fourth-column news feed can remain unchanged because its star action already persists pinned news and emits the shared update event.
+- Added `src/news/followUpStore.ts` for localStorage-backed follow-up items, local date helpers, manual item creation, and migration from pinned news.
+- Rebuilt `EditorDesk` as "今日跟进" with date switching, refresh icon button, export, +事项, drag-to-parent nesting, collapse, removal, and item date movement.
+- Added compact follow-up styles for the new top bar, icon refresh, nested rows, parent emphasis, inline date movement, and remove controls.
+- `npm run build` passed.
+- Browser DOM check at `http://127.0.0.1:5173` confirmed the third column renders "今日跟进", date switcher, refresh icon, 导出, +事项, and keeps columns at `238px 310px 310px 570px`.
+- Tightened the top date control to display `05-21` while keeping a hidden native date picker; `npm run build` passed again and browser DOM recheck confirmed the compact label.
+- Adjusted the follow-up header so `今日跟进`, date controls, refresh icon, 导出, and +事项 stay on one horizontal row.
+- Restored selected news rows to a single-line layout with the right-side active star, removing the visible per-row date and X controls; parent rows still show collapse/expand only when they have children.
+- `npm run build` passed after the alignment and row presentation fixes, and browser DOM check confirmed no visible row date/X controls.
+- Changed +事项 from a single prompt to a modal with two inputs: 事项名 and 日期.
+- Changed parent/theme star removal so only the parent item is removed and its direct children are promoted one level instead of deleting the whole subtree.
+- Added a drag-out target at the bottom of the follow-up list while dragging; dropping there restores an item to the root level.
+- `npm run build` passed and browser check confirmed the add modal exposes the expected text/date inputs.
+- Added a compact `...` button between each follow-up title and star; it opens a date-adjustment modal for changing the item's display date.
+- Replaced the top native date picker with a custom month picker so dates that contain active follow-up items can be visually marked with accent styling.
+- `npm run build` passed after the date-control changes; static checks confirmed the row button, date-adjustment modal, calendar grid, and marked-date classes are present.
