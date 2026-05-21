@@ -99,13 +99,20 @@ async function requestSharedState(path = "", init?: RequestInit) {
     payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
       ? payload.error
       : `http_${response.status}`;
+  const supabaseStatus =
+    payload && typeof payload === "object" && "supabaseStatus" in payload && typeof payload.supabaseStatus === "number"
+      ? ` supabase:${payload.supabaseStatus}`
+      : "";
+  const detail =
+    payload && typeof payload === "object" && "detail" in payload && typeof payload.detail === "string" ? ` ${payload.detail}` : "";
+  const debugCode = `${errorCode}${supabaseStatus}${detail}`.trim();
 
   if (response.status === 401 || response.status === 403) {
     clearEditorAccessCode();
-    throw new SharedStateError("editor access denied", errorCode, response.status);
+    throw new SharedStateError("editor access denied", debugCode, response.status);
   }
 
-  if (!response.ok) throw new SharedStateError(`shared state request failed: ${response.status}`, errorCode, response.status);
+  if (!response.ok) throw new SharedStateError(`shared state request failed: ${response.status}`, debugCode, response.status);
   return payload;
 }
 

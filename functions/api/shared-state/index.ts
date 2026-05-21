@@ -35,7 +35,18 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     headers: getSupabaseHeaders(env),
   });
 
-  if (!response.ok) return json({ error: "supabase_read_failed" }, 502);
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+
+    return json(
+      {
+        detail: detail.slice(0, 220),
+        error: "supabase_read_failed",
+        supabaseStatus: response.status,
+      },
+      502,
+    );
+  }
 
   const rows = (await response.json()) as Array<{ key: string; value: unknown; updated_at: string }>;
   return json({

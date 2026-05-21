@@ -48,7 +48,18 @@ export const onRequest: PagesFunction<Env> = async ({ env, params, request }) =>
       headers: getSupabaseHeaders(env),
     });
 
-    if (!response.ok) return json({ error: "supabase_read_failed" }, 502);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+
+      return json(
+        {
+          detail: detail.slice(0, 220),
+          error: "supabase_read_failed",
+          supabaseStatus: response.status,
+        },
+        502,
+      );
+    }
 
     const rows = (await response.json()) as Array<{ key: string; value: unknown; updated_at: string }>;
     return json({
@@ -67,7 +78,18 @@ export const onRequest: PagesFunction<Env> = async ({ env, params, request }) =>
       headers: getSupabaseHeaders(env),
     });
 
-    if (!response.ok) return json({ error: "supabase_read_failed" }, 502);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+
+      return json(
+        {
+          detail: detail.slice(0, 220),
+          error: "supabase_read_failed",
+          supabaseStatus: response.status,
+        },
+        502,
+      );
+    }
 
     const rows = (await response.json()) as Array<{ key: string; value: unknown; updated_at: string }>;
     const row = rows[0];
@@ -92,7 +114,18 @@ export const onRequest: PagesFunction<Env> = async ({ env, params, request }) =>
       method: "POST",
     });
 
-    if (!response.ok) return json({ error: "supabase_write_failed" }, 502);
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+
+      return json(
+        {
+          detail: detail.slice(0, 220),
+          error: "supabase_write_failed",
+          supabaseStatus: response.status,
+        },
+        502,
+      );
+    }
 
     const rows = (await response.json()) as Array<{ key: string; value: unknown; updated_at: string }>;
     const row = rows[0];
