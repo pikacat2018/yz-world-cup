@@ -153,5 +153,17 @@
 - Started Follow-Up Ordering v1 for the third column: manual starred/manual items should appear above auto Reddit hot items, and rows should support manual drag reordering.
 - Re-read `EditorDesk`, `followUpStore`, `newsStore`, and `MessagePanel`; confirmed `sourcePinned: true` identifies auto-pinned Reddit hot entries while manual stars remain false/undefined.
 - Added `placement` and `displayOrder` metadata to follow-up items; manual/manual-starred items sort above auto source-pinned items, with manual insertions placed at the top and auto insertions at the bottom.
-- Updated third-column drag/drop so dropping on the upper/lower half of a row reorders within the same manual/auto group; Alt-drop still uses the existing nest-under-parent behavior.
+- Updated third-column drag/drop so dropping on row edges reorders within the same manual/auto group, while dropping on the row center nests under that item as a parent theme.
 - `npm run build` passed after the follow-up ordering and drag-position changes.
+- Slowed the top ticker from `max(26s, itemCount * 3s)` to `max(48s, itemCount * 5.5s)` to reduce motion blur.
+- Normalized top ticker item spacing by moving truncation to `.system-ticker-text`, keeping the item/separator outside the clipped text, and giving label/divider/text explicit inherited font sizes for English and Chinese consistency.
+- `npm run build` passed after the top ticker speed, spacing, and typography adjustments.
+- Adjusted top ticker speed to the midpoint `max(36s, itemCount * 4.2s)`, removed per-item type prefixes from the rendered scroll text, and stopped truncating item text so every ticker item displays in full as it scrolls.
+- `npm run build` passed after the midpoint speed and full-text ticker update.
+- Investigated mobile top ticker instability: old span rules could still affect ticker descendants, mobile text autosizing could enlarge English differently, and item-count-based timing became uneven after full long titles were restored.
+- Locked top ticker text to 11px with `text-size-adjust` guards, changed duration to a bounded character-count estimate, rendered three duplicate groups, and changed the loop distance to one third of the track for smoother continuity.
+- `npm run build` passed after the ticker font-size and continuity fix.
+- Mobile-only tuning: compressed the top-left ticker label to 68px with tighter letter spacing and reduced the theme toggle horizontal padding/right margin to give the top ticker more room on narrow screens.
+- `npm run build` failed after this CSS-only mobile adjustment because existing `vite.config.ts` errors reference missing Reddit helper symbols; no build errors pointed at the modified ticker CSS.
+- Removed the Alt-drop requirement; row-edge drops now show an insertion gap and row-center drops show a translucent parent-target state.
+- `npm run build` passed after replacing the Alt interaction with visual drop zones.

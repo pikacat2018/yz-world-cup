@@ -87,7 +87,7 @@ Make the third-column follow-up desk place manually starred/manual items above a
 ## Decisions
 - Treat manual follow-up items and manually starred news as the upper group.
 - Treat `sourcePinned` news, including auto Reddit hot entries, as the lower automatic group.
-- Keep existing hierarchy support, but row drops should primarily adjust order.
+- Keep existing hierarchy support by using row-center drops for nesting and row-edge drops for ordering.
 
 # Top Ticker Today Feed v1 Plan
 

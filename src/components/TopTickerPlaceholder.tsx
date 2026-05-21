@@ -69,7 +69,10 @@ type TopTickerPlaceholderProps = {
 export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTickerPlaceholderProps) {
   const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(buildTopTickerItems);
   const statusCopy = useMemo(() => tickerItems.map((item) => `${item.label}: ${item.text}`).join(" / "), [tickerItems]);
-  const animationDuration = useMemo(() => `${Math.max(26, tickerItems.length * 3)}s`, [tickerItems.length]);
+  const animationDuration = useMemo(() => {
+    const textLength = tickerItems.reduce((total, item) => total + item.text.length, 0);
+    return `${Math.max(36, Math.min(112, textLength * 0.135))}s`;
+  }, [tickerItems]);
 
   useEffect(() => {
     const refreshTicker = () => setTickerItems(buildTopTickerItems());
@@ -95,6 +98,7 @@ export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTicker
         <div className="system-ticker-track">
           <TopTickerContent items={tickerItems} />
           <TopTickerContent isDuplicate items={tickerItems} />
+          <TopTickerContent isDuplicate items={tickerItems} />
         </div>
       </div>
       <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
@@ -113,8 +117,6 @@ function TopTickerContent({ isDuplicate = false, items }: TopTickerContentProps)
       {items.map((item) => {
         const copy = (
           <>
-            <span className="system-ticker-label">{item.label}</span>
-            <span className="system-ticker-divider">｜</span>
             <span className="system-ticker-text">{item.text}</span>
           </>
         );

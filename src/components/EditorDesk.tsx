@@ -41,7 +41,7 @@ type FollowUpTreeRow = {
   childCount: number;
 };
 
-type TouchDropTarget = {
+type DropTarget = {
   id: string;
   mode: "before" | "after" | "inside";
 };
@@ -186,9 +186,9 @@ export default function EditorDesk() {
   const [copyStatus, setCopyStatus] = useState("");
   const [keywordWindowHours, setKeywordWindowHours] = useState<RecentKeywordWindowHours>(12);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "fetching" | "updated" | "empty" | "failed">("idle");
-  const [touchDropTarget, setTouchDropTarget] = useState<TouchDropTarget | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const touchDragRef = useRef<TouchDragState | null>(null);
-  const touchDropTargetRef = useRef<TouchDropTarget | null>(null);
+  const touchDropTargetRef = useRef<DropTarget | null>(null);
   const suppressNextTitleClickRef = useRef(false);
 
   const persistFollowUps = useCallback((nextItems: FollowUpItem[]) => {
@@ -426,18 +426,28 @@ export default function EditorDesk() {
     persistFollowUps(followUps.map((item) => (item.id === dragged.id ? { ...item, parentId: undefined, updatedAt: now } : item)));
   };
 
-  const getTouchDropTarget = (clientX: number, clientY: number, draggedId: string): TouchDropTarget | null => {
+  const getRowDropMode = (row: HTMLElement, clientY: number): DropTarget["mode"] => {
+    const rect = row.getBoundingClientRect();
+    const relativeY = (clientY - rect.top) / Math.max(rect.height, 1);
+
+    return relativeY < 0.25 ? "before" : relativeY > 0.75 ? "after" : "inside";
+  };
+
+  const getPointerDropTarget = (clientX: number, clientY: number, draggedId: string): DropTarget | null => {
     const element = document.elementFromPoint(clientX, clientY);
     const row = element?.closest<HTMLElement>("[data-follow-up-id]");
     const targetId = row?.dataset.followUpId;
 
     if (!row || !targetId || targetId === draggedId) return null;
 
-    const rect = row.getBoundingClientRect();
-    const relativeY = (clientY - rect.top) / Math.max(rect.height, 1);
-    const mode = relativeY < 0.25 ? "before" : relativeY > 0.75 ? "after" : "inside";
+    return { id: targetId, mode: getRowDropMode(row, clientY) };
+  };
 
-    return { id: targetId, mode };
+  const applyDropTarget = (draggedId: string, target: DropTarget | null) => {
+    if (!target) return;
+
+    if (target.mode === "inside") moveItemUnderParent(draggedId, target.id);
+    else moveItemNearTarget(draggedId, target.id, target.mode);
   };
 
   const handleTouchDragStart = (itemId: string, event: PointerEvent<HTMLElement>) => {
@@ -463,8 +473,8 @@ export default function EditorDesk() {
     drag.isDragging = true;
     suppressNextTitleClickRef.current = true;
     setDraggingId(drag.id);
-    touchDropTargetRef.current = getTouchDropTarget(event.clientX, event.clientY, drag.id);
-    setTouchDropTarget(touchDropTargetRef.current);
+    touchDropTargetRef.current = getPointerDropTarget(event.clientX, event.clientY, drag.id);
+    setDropTarget(touchDropTargetRef.current);
     event.preventDefault();
   };
 
@@ -475,10 +485,7 @@ export default function EditorDesk() {
     const target = touchDropTargetRef.current;
 
     if (drag.isDragging) {
-      if (target) {
-        if (target.mode === "inside") moveItemUnderParent(drag.id, target.id);
-        else moveItemNearTarget(drag.id, target.id, target.mode);
-      }
+      applyDropTarget(drag.id, target);
       window.setTimeout(() => {
         suppressNextTitleClickRef.current = false;
       }, 250);
@@ -487,7 +494,7 @@ export default function EditorDesk() {
     touchDragRef.current = null;
     touchDropTargetRef.current = null;
     setDraggingId("");
-    setTouchDropTarget(null);
+    setDropTarget(null);
   };
 
   const handleTitleClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -532,13 +539,27 @@ export default function EditorDesk() {
     return (
       <li
         className={`selected-item follow-up-item level-${level} ${isParent ? "parent" : ""} ${draggingId === item.id ? "dragging" : ""} ${
-          touchDropTarget?.id === item.id ? `touch-drop-${touchDropTarget.mode}` : ""
+          dropTarget?.id === item.id ? `drop-${dropTarget.mode}` : ""
         }`}
         data-follow-up-id={item.id}
         draggable
         key={item.id}
-        onDragEnd={() => setDraggingId("")}
-        onDragOver={(event) => event.preventDefault()}
+        onDragEnd={() => {
+          setDraggingId("");
+          setDropTarget(null);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDropTarget((current) => (current?.id === item.id ? null : current));
+          }
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          const draggedItemId = event.dataTransfer.getData("text/plain") || draggingId;
+          if (!draggedItemId || draggedItemId === item.id) return;
+
+          setDropTarget({ id: item.id, mode: getRowDropMode(event.currentTarget, event.clientY) });
+        }}
         onDragStart={(event) => {
           setDraggingId(item.id);
           event.dataTransfer.effectAllowed = "move";
@@ -548,13 +569,9 @@ export default function EditorDesk() {
           event.preventDefault();
           event.stopPropagation();
           const draggedItemId = event.dataTransfer.getData("text/plain") || draggingId;
-          if (event.altKey) {
-            moveItemUnderParent(draggedItemId, item.id);
-          } else {
-            const rect = event.currentTarget.getBoundingClientRect();
-            moveItemNearTarget(draggedItemId, item.id, event.clientY > rect.top + rect.height / 2 ? "after" : "before");
-          }
+          applyDropTarget(draggedItemId, dropTarget?.id === item.id ? dropTarget : { id: item.id, mode: getRowDropMode(event.currentTarget, event.clientY) });
           setDraggingId("");
+          setDropTarget(null);
         }}
         style={{ "--follow-up-level": level } as CSSProperties}
       >
@@ -728,6 +745,7 @@ export default function EditorDesk() {
           event.preventDefault();
           moveItemToRoot(event.dataTransfer.getData("text/plain") || draggingId);
           setDraggingId("");
+          setDropTarget(null);
         }}
       >
         {visibleRows.length > 0 ? (
