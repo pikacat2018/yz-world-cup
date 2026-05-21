@@ -149,3 +149,4 @@
 - Added `supabase/schema.sql`, `.env.example`, and `DEPLOY.md` for the free deployment path.
 - Wired `newsStore` and `followUpStore` save helpers to push shared documents while preserving localStorage fallback.
 - `npm run build` passed after the shared online editing migration.
+- After first Cloudflare deployment, editor access failed because `/api/shared-state` needed an explicit Pages Function base route; added `functions/api/shared-state/index.ts`.
