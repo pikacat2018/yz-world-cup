@@ -137,3 +137,15 @@
 - Added a compact `...` button between each follow-up title and star; it opens a date-adjustment modal for changing the item's display date.
 - Replaced the top native date picker with a custom month picker so dates that contain active follow-up items can be visually marked with accent styling.
 - `npm run build` passed after the date-control changes; static checks confirmed the row button, date-adjustment modal, calendar grid, and marked-date classes are present.
+
+# Shared Online Editing v1 Progress
+
+- Started Cloudflare Pages + Supabase Free migration for four editors.
+- Installed `@supabase/supabase-js`, though the planned v1 architecture keeps Supabase service credentials server-side via Cloudflare Functions.
+- Re-read planning files and inspected `newsStore`, `followUpStore`, `MessagePanel`, `BottomTicker`, and `App` to identify localStorage write/read boundaries.
+- Added `src/shared/onlineState.ts` with access-code storage, shared-state hydration, save debouncing, and 5-second polling.
+- Added `EditorAccessGate` and wrapped the main app so shared editing can require an access code when `VITE_SHARED_EDITING=true`.
+- Added Cloudflare Pages Functions for `/api/shared-state`, `/api/reddit/collect`, and `/api/zhibo8/detail`.
+- Added `supabase/schema.sql`, `.env.example`, and `DEPLOY.md` for the free deployment path.
+- Wired `newsStore` and `followUpStore` save helpers to push shared documents while preserving localStorage fallback.
+- `npm run build` passed after the shared online editing migration.

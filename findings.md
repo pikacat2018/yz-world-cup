@@ -20,3 +20,10 @@
 - `MessagePanel` already saves pinned news items and emits `BOTTOM_TICKER_UPDATED_EVENT`; the third column can listen to the same event and migrate newly pinned items into follow-up storage.
 - The existing `BottomTicker` component exists but is not mounted in `App.tsx`/`Layout.tsx`; this task should not depend on it.
 - Existing CSS already has third-column selected-list/source-strip/export styles that can be extended rather than replacing the dashboard layout.
+
+# Shared Online Editing v1 Findings
+
+- Current collaboration-critical data lives in `localStorage`: news items, pinned/read/unread ids, Reddit hot seen keys, follow-up items, and theme.
+- The Vite-only `/api/reddit/collect` and `/api/zhibo8/detail` middleware is not suitable as a production backend; production shared state needs Cloudflare Pages Functions or another server layer.
+- A server-side API can use Supabase service-role credentials while the browser only knows an editor access code.
+- Four editors do not need high-frequency realtime infrastructure for v1; short polling plus optimistic local writes is enough and simpler on the free plan.

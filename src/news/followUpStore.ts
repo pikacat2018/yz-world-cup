@@ -1,4 +1,5 @@
 import type { NewsItem, NewsSource, RedditSourceVariant } from "./types";
+import { isApplyingSharedState, queueSharedStateSave } from "../shared/onlineState";
 
 export type FollowUpItemType = "news" | "manual";
 export type FollowUpStatus = "active" | "done";
@@ -85,7 +86,10 @@ export function readFollowUpItems(): FollowUpItem[] {
 }
 
 export function saveFollowUpItems(items: FollowUpItem[]) {
-  window.localStorage.setItem(FOLLOW_UP_STORAGE_KEY, JSON.stringify(sortFollowUpItems(items).slice(0, MAX_FOLLOW_UP_ITEMS)));
+  const nextItems = sortFollowUpItems(items).slice(0, MAX_FOLLOW_UP_ITEMS);
+
+  window.localStorage.setItem(FOLLOW_UP_STORAGE_KEY, JSON.stringify(nextItems));
+  if (!isApplyingSharedState()) queueSharedStateSave("follow_up_items", nextItems);
 }
 
 export function notifyFollowUpUpdated() {

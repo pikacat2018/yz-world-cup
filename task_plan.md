@@ -53,3 +53,22 @@ Upgrade the third-column selected-news desk into a date-based "今日跟进" edi
 - Keep the fourth-column news feed UI unchanged; stars remain the only initial selection entry.
 - Treat manual themes and selected news as the same follow-up item type, with `parentId` creating hierarchy.
 - Allow at most two child levels below a root item.
+
+# Shared Online Editing v1 Plan
+
+## Goal
+Move editor-facing state from single-browser localStorage into a Cloudflare Pages Function + Supabase shared store so four editors can open the same website and see star/follow-up changes from each other while server keys remain hidden.
+
+## Phases
+1. Inspect current localStorage write/read points and deployment shape. - complete
+2. Add shared-state API contract, Cloudflare Function, and Supabase table SQL. - complete
+3. Add frontend access-code gate plus shared-state polling/hydration client. - complete
+4. Wire existing news/follow-up save helpers to push shared changes without breaking local fallback. - complete
+5. Build and document deployment environment variables. - complete
+
+## Decisions
+- Use a server-side Cloudflare Pages Function to keep the Supabase service-role key off the client.
+- Use a simple editor access code for the first four-person deployment.
+- Store shared editor data as keyed JSON documents so the existing frontend can migrate incrementally.
+- Keep localStorage as the offline/local development fallback.
+- Use 5-second polling rather than browser-side Supabase Realtime so no Supabase key is exposed to editors.

@@ -1,6 +1,7 @@
 import { extractRedditPostId, fetchRedditNews } from "./adapters/redditAdapter";
 import { fetchXNews } from "./adapters/xAdapter";
 import { fetchZhibo8News } from "./adapters/zhibo8Adapter";
+import { isApplyingSharedState, queueSharedStateSave } from "../shared/onlineState";
 import type { NewsFeedState, NewsItem } from "./types";
 
 export const PINNED_NEWS_STORAGE_KEY = "yz-world-cup-pinned-news";
@@ -211,7 +212,10 @@ export function readPinnedNewsIds(): string[] {
 }
 
 export function savePinnedNewsIds(ids: string[]) {
-  saveIdList(PINNED_NEWS_STORAGE_KEY, ids, MAX_PINNED_NEWS);
+  const nextIds = Array.from(new Set(ids)).slice(0, MAX_PINNED_NEWS);
+
+  saveIdList(PINNED_NEWS_STORAGE_KEY, nextIds, MAX_PINNED_NEWS);
+  if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_ids", nextIds);
 }
 
 export function readReadNewsIds(): string[] {
@@ -219,7 +223,10 @@ export function readReadNewsIds(): string[] {
 }
 
 export function saveReadNewsIds(ids: string[]) {
-  saveIdList(READ_NEWS_STORAGE_KEY, ids);
+  const nextIds = Array.from(new Set(ids));
+
+  saveIdList(READ_NEWS_STORAGE_KEY, nextIds);
+  if (!isApplyingSharedState()) queueSharedStateSave("read_news_ids", nextIds);
 }
 
 export function readUnreadNewsIds(): string[] {
@@ -227,7 +234,10 @@ export function readUnreadNewsIds(): string[] {
 }
 
 export function saveUnreadNewsIds(ids: string[]) {
-  saveIdList(UNREAD_NEWS_STORAGE_KEY, ids);
+  const nextIds = Array.from(new Set(ids));
+
+  saveIdList(UNREAD_NEWS_STORAGE_KEY, nextIds);
+  if (!isApplyingSharedState()) queueSharedStateSave("unread_news_ids", nextIds);
 }
 
 export function readRedditHotSeenKeys(): string[] {
@@ -235,7 +245,10 @@ export function readRedditHotSeenKeys(): string[] {
 }
 
 export function saveRedditHotSeenKeys(keys: string[]) {
-  saveIdList(REDDIT_HOT_SEEN_STORAGE_KEY, keys);
+  const nextKeys = Array.from(new Set(keys));
+
+  saveIdList(REDDIT_HOT_SEEN_STORAGE_KEY, nextKeys);
+  if (!isApplyingSharedState()) queueSharedStateSave("reddit_hot_seen_keys", nextKeys);
 }
 
 export function markRedditHotSeen(item: NewsItem) {
@@ -286,7 +299,10 @@ export function reconcileRedditHotSeenState(): NewsItem[] {
 }
 
 export function saveNewsItems(items: NewsItem[]) {
-  window.localStorage.setItem(NEWS_ITEMS_STORAGE_KEY, JSON.stringify(limitNewsItems(items)));
+  const nextItems = limitNewsItems(items);
+
+  window.localStorage.setItem(NEWS_ITEMS_STORAGE_KEY, JSON.stringify(nextItems));
+  if (!isApplyingSharedState()) queueSharedStateSave("news_items", nextItems);
 }
 
 export function markNewsIdRead(id: string) {

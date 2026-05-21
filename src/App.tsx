@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import AllGroupsOverview from "./components/AllGroupsOverview";
 import AllSchedulePage from "./components/AllSchedulePage";
+import EditorAccessGate from "./components/EditorAccessGate";
 import Layout from "./components/Layout";
 import { type AppTheme, isAppTheme, THEME_STORAGE_KEY } from "./components/ThemeToggle";
 import { groups } from "./data/mockWorldCup";
@@ -42,11 +43,13 @@ export default function App() {
   }, []);
 
   return (
-    <Layout
-      onThemeChange={setTheme}
-      selectedGroupId={selectedGroupId}
-      theme={theme}
-      onSelectGroup={setSelectedGroupId}
-    />
+    <EditorAccessGate>
+      <Layout
+        onThemeChange={setTheme}
+        selectedGroupId={selectedGroupId}
+        theme={theme}
+        onSelectGroup={setSelectedGroupId}
+      />
+    </EditorAccessGate>
   );
 }
