@@ -17,9 +17,9 @@ type MobileColumn = "rail" | "radar" | "editor" | "news";
 
 const mobileColumns: Array<{ id: MobileColumn; label: string }> = [
   { id: "news", label: "新闻" },
-  { id: "rail", label: "第一栏" },
-  { id: "radar", label: "第二栏" },
-  { id: "editor", label: "第三栏" },
+  { id: "editor", label: "今日跟进" },
+  { id: "rail", label: "赛程数据" },
+  { id: "radar", label: "小组" },
 ];
 
 export default function Layout({ onThemeChange, selectedGroupId, theme, onSelectGroup }: LayoutProps) {
