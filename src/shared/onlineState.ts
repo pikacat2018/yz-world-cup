@@ -14,6 +14,18 @@ type SharedStateDocument = {
 
 type SharedStateStatus = "disabled" | "locked" | "syncing" | "ready" | "error";
 
+export class SharedStateError extends Error {
+  code: string;
+  status: number;
+
+  constructor(message: string, code: string, status: number) {
+    super(message);
+    this.name = "SharedStateError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 const SHARED_EDITING_ENABLED = import.meta.env.VITE_SHARED_EDITING === "true";
 const ACCESS_CODE_STORAGE_KEY = "yz-world-cup-editor-access-code";
 const API_BASE = "/api/shared-state";
@@ -76,14 +88,25 @@ async function requestSharedState(path = "", init?: RequestInit) {
       ...(init?.headers ?? {}),
     },
   });
+  let payload: unknown = null;
+
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const errorCode =
+    payload && typeof payload === "object" && "error" in payload && typeof payload.error === "string"
+      ? payload.error
+      : `http_${response.status}`;
 
   if (response.status === 401 || response.status === 403) {
     clearEditorAccessCode();
-    throw new Error("editor access denied");
+    throw new SharedStateError("editor access denied", errorCode, response.status);
   }
 
-  if (!response.ok) throw new Error(`shared state request failed: ${response.status}`);
-  return response.json() as Promise<unknown>;
+  if (!response.ok) throw new SharedStateError(`shared state request failed: ${response.status}`, errorCode, response.status);
+  return payload;
 }
 
 function applyDocument(document: SharedStateDocument) {

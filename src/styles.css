@@ -103,6 +103,16 @@
   padding: 0 12px;
 }
 
+.editor-access-input-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 72px;
+}
+
+.editor-access-input-row input {
+  min-width: 0;
+}
+
 .editor-access-panel button {
   background: #e3b44a;
   border: 0;
@@ -114,6 +124,13 @@
   height: 42px;
 }
 
+.editor-access-panel .editor-access-visibility-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(188, 207, 232, 0.26);
+  color: #eef4ff;
+  font-size: 12px;
+}
+
 .editor-access-panel button:disabled {
   cursor: wait;
   opacity: 0.7;
@@ -121,9 +138,17 @@
 
 .editor-access-panel p {
   color: #ffb3a8;
+  display: grid;
+  gap: 6px;
   font-size: 13px;
   line-height: 1.5;
   margin: 0;
+}
+
+.editor-access-error-detail {
+  color: #ffd2cc;
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 12px;
 }
 
 * {
