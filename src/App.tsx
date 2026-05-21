@@ -8,10 +8,10 @@ import { groups } from "./data/mockWorldCup";
 
 export default function App() {
   const [theme, setTheme] = useState<AppTheme>(() => {
-    if (typeof window === "undefined") return "light-blue";
+    if (typeof window === "undefined") return "dark-editorial";
 
     const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isAppTheme(savedTheme) ? savedTheme : "light-blue";
+    return isAppTheme(savedTheme) ? savedTheme : "dark-editorial";
   });
 
   useEffect(() => {
