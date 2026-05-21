@@ -15,3 +15,6 @@ for all
 to anon, authenticated
 using (false)
 with check (false);
+
+grant usage on schema public to service_role;
+grant select, insert, update, delete on table public.editor_state to service_role;
