@@ -40,10 +40,10 @@ export default function SchedulePanel() {
   };
 
   return (
-    <section className="panel schedule-panel" aria-label="赛程队列">
+    <section className="panel schedule-panel" aria-label="赛程">
       <div className="panel-title-row schedule-head-row">
         <div>
-          <h2>赛程队列</h2>
+          <h2>赛程</h2>
         </div>
         <div className="schedule-title-tools">
           <div className="date-switcher" aria-label="选择比赛日期">

@@ -72,3 +72,36 @@ Move editor-facing state from single-browser localStorage into a Cloudflare Page
 - Store shared editor data as keyed JSON documents so the existing frontend can migrate incrementally.
 - Keep localStorage as the offline/local development fallback.
 - Use 5-second polling rather than browser-side Supabase Realtime so no Supabase key is exposed to editors.
+
+# Follow-Up Ordering v1 Plan
+
+## Goal
+Make the third-column follow-up desk place manually starred/manual items above auto-captured Reddit hot items, and allow editors to drag rows to adjust display order.
+
+## Phases
+1. Inspect follow-up storage, Reddit auto-pin flow, manual add flow, and existing drag behavior. - complete
+2. Add follow-up ordering metadata and manual-vs-auto grouping in storage helpers. - complete
+3. Update third-column manual add, pinned migration, and drag handlers to persist row order. - complete
+4. Build and summarize modified files. - complete
+
+## Decisions
+- Treat manual follow-up items and manually starred news as the upper group.
+- Treat `sourcePinned` news, including auto Reddit hot entries, as the lower automatic group.
+- Keep existing hierarchy support, but row drops should primarily adjust order.
+
+# Top Ticker Today Feed v1 Plan
+
+## Goal
+Replace the top status ticker content with today's finished match pairings plus today's follow-up news, with link-capable news items and continuous horizontal scrolling.
+
+## Phases
+1. Inspect top ticker data/rendering, match data, follow-up storage, and existing ticker animation styles. - complete
+2. Rebuild top ticker items from today's finished matches and today's active follow-up items. - complete
+3. Render duplicated ticker content with anchors for items that have `url`/`externalUrl` or can be backfilled from source news. - complete
+4. Add top ticker scroll animation and hover/focus pause styles. - complete
+5. Build and browser-check the top ticker behavior. - complete
+
+## Decisions
+- Use `getLocalDateKey()` as the definition of "today" so the top ticker matches the follow-up editor date model.
+- Show compact empty states for missing match results or follow-up items instead of reverting to the old status metrics.
+- Backfill follow-up news links through `sourceNewsId` and `readStoredNewsItems()` when older follow-up records do not store URL fields directly.

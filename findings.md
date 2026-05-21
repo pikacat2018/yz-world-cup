@@ -27,3 +27,9 @@
 - The Vite-only `/api/reddit/collect` and `/api/zhibo8/detail` middleware is not suitable as a production backend; production shared state needs Cloudflare Pages Functions or another server layer.
 - A server-side API can use Supabase service-role credentials while the browser only knows an editor access code.
 - Four editors do not need high-frequency realtime infrastructure for v1; short polling plus optimistic local writes is enough and simpler on the free plan.
+
+# Follow-Up Ordering v1 Findings
+
+- Third-column items are stored as `FollowUpItem`s in `followUpStore.ts`; pinned news migrates through `mergePinnedNewsIntoFollowUps`.
+- Auto Reddit hot items are represented as pinned news with `sourcePinned: true`; manually starred news keeps `sourcePinned` false/undefined.
+- Existing third-column drag-and-drop only changes hierarchy by dropping a row onto another row; storage sorting currently ignores manual row position and sorts by date plus creation time.

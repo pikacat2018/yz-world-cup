@@ -2,6 +2,7 @@ import type { NewsItem, NewsSource, RedditSourceVariant } from "./types";
 import { isApplyingSharedState, queueSharedStateSave } from "../shared/onlineState";
 
 export type FollowUpItemType = "news" | "manual";
+export type FollowUpPlacement = "manual" | "auto";
 export type FollowUpStatus = "active" | "done";
 
 export type FollowUpItem = {
@@ -16,6 +17,8 @@ export type FollowUpItem = {
   externalUrl?: string;
   note?: string;
   type: FollowUpItemType;
+  placement?: FollowUpPlacement;
+  displayOrder?: number;
   status: FollowUpStatus;
   createdAt: string;
   updatedAt: string;
@@ -48,6 +51,8 @@ const isFollowUpStatus = (value: unknown): value is FollowUpStatus => value === 
 
 const isFollowUpType = (value: unknown): value is FollowUpItemType => value === "news" || value === "manual";
 
+const isFollowUpPlacement = (value: unknown): value is FollowUpPlacement => value === "manual" || value === "auto";
+
 const isFollowUpItem = (value: unknown): value is FollowUpItem => {
   if (!value || typeof value !== "object") return false;
 
@@ -63,16 +68,45 @@ const isFollowUpItem = (value: unknown): value is FollowUpItem => {
   );
 };
 
-const getSortTime = (item: FollowUpItem) => {
+const getSortTime = (item: Pick<FollowUpItem, "createdAt">) => {
   const time = new Date(item.createdAt).getTime();
   return Number.isNaN(time) ? 0 : time;
 };
 
+export const getFollowUpPlacement = (item: FollowUpItem): FollowUpPlacement =>
+  isFollowUpPlacement(item.placement) ? item.placement : "manual";
+
+const getPlacementRank = (item: FollowUpItem) => (getFollowUpPlacement(item) === "manual" ? 0 : 1);
+
+const getDisplayOrder = (item: FollowUpItem) => (typeof item.displayOrder === "number" ? item.displayOrder : getSortTime(item));
+
 const sortFollowUpItems = (items: FollowUpItem[]) =>
   items
     .map((item, index) => ({ index, item }))
-    .sort((a, b) => a.item.date.localeCompare(b.item.date) || getSortTime(a.item) - getSortTime(b.item) || a.index - b.index)
+    .sort(
+      (a, b) =>
+        a.item.date.localeCompare(b.item.date) ||
+        getPlacementRank(a.item) - getPlacementRank(b.item) ||
+        getDisplayOrder(a.item) - getDisplayOrder(b.item) ||
+        getSortTime(a.item) - getSortTime(b.item) ||
+        a.index - b.index,
+    )
     .map(({ item }) => item);
+
+export function getNextFollowUpDisplayOrder(
+  items: FollowUpItem[],
+  date: string,
+  placement: FollowUpPlacement,
+  position: "top" | "bottom",
+) {
+  const matchingOrders = items
+    .filter((item) => item.date === date && getFollowUpPlacement(item) === placement)
+    .map(getDisplayOrder)
+    .filter((order) => Number.isFinite(order));
+
+  if (matchingOrders.length === 0) return Date.now();
+  return position === "top" ? Math.min(...matchingOrders) - 1 : Math.max(...matchingOrders) + 1;
+}
 
 export function readFollowUpItems(): FollowUpItem[] {
   try {
@@ -96,8 +130,9 @@ export function notifyFollowUpUpdated() {
   window.dispatchEvent(new Event(FOLLOW_UP_UPDATED_EVENT));
 }
 
-export function createFollowUpFromNews(newsItem: NewsItem, date: string): FollowUpItem {
+export function createFollowUpFromNews(newsItem: NewsItem, date: string, displayOrder?: number): FollowUpItem {
   const now = new Date().toISOString();
+  const placement: FollowUpPlacement = newsItem.sourcePinned ? "auto" : "manual";
 
   return {
     id: `follow-news-${newsItem.id}`,
@@ -109,13 +144,15 @@ export function createFollowUpFromNews(newsItem: NewsItem, date: string): Follow
     url: newsItem.url,
     externalUrl: newsItem.externalUrl,
     type: "news",
+    placement,
+    displayOrder: displayOrder ?? Date.now(),
     status: "active",
     createdAt: now,
     updatedAt: now,
   };
 }
 
-export function createManualFollowUp(title: string, date: string, url?: string): FollowUpItem {
+export function createManualFollowUp(title: string, date: string, url?: string, displayOrder?: number): FollowUpItem {
   const now = new Date().toISOString();
   const normalizedUrl = url?.trim();
 
@@ -125,6 +162,8 @@ export function createManualFollowUp(title: string, date: string, url?: string):
     title,
     url: normalizedUrl || undefined,
     type: "manual",
+    placement: "manual",
+    displayOrder: displayOrder ?? Date.now(),
     status: "active",
     createdAt: now,
     updatedAt: now,
@@ -140,12 +179,19 @@ export function mergePinnedNewsIntoFollowUps(
   addedCount: number;
 } {
   const existingNewsIds = new Set(followUps.map((item) => item.sourceNewsId).filter(Boolean));
-  const incoming = newsItems
-    .filter((item) => item.pinned && !existingNewsIds.has(item.id))
-    .map((item) => createFollowUpFromNews(item, targetDate));
+  const incoming = newsItems.filter((item) => item.pinned && !existingNewsIds.has(item.id));
+  const nextIncoming: FollowUpItem[] = [];
+
+  for (const item of incoming) {
+    const placement: FollowUpPlacement = item.sourcePinned ? "auto" : "manual";
+    const position = placement === "manual" ? "top" : "bottom";
+    const displayOrder = getNextFollowUpDisplayOrder([...followUps, ...nextIncoming], targetDate, placement, position);
+
+    nextIncoming.push(createFollowUpFromNews(item, targetDate, displayOrder));
+  }
 
   return {
-    addedCount: incoming.length,
-    items: incoming.length > 0 ? sortFollowUpItems([...followUps, ...incoming]) : followUps,
+    addedCount: nextIncoming.length,
+    items: nextIncoming.length > 0 ? sortFollowUpItems([...followUps, ...nextIncoming]) : followUps,
   };
 }

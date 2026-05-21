@@ -13,10 +13,10 @@ type BoardRow = {
 
 const tabs: { id: BoardTab; label: string }[] = [
   { id: "overview", label: "概览" },
-  { id: "scorers", label: "射手榜" },
-  { id: "assists", label: "助攻榜" },
+  { id: "scorers", label: "进球" },
+  { id: "assists", label: "助攻" },
   { id: "cards", label: "红黄牌" },
-  { id: "events", label: "事件榜" },
+  { id: "events", label: "事件" },
 ];
 
 export default function DataBoards() {

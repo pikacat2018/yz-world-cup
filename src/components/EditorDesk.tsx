@@ -1,10 +1,12 @@
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type MouseEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
   createManualFollowUp,
   FOLLOW_UP_UPDATED_EVENT,
   formatDateLabel,
+  getFollowUpPlacement,
   getLocalDateKey,
+  getNextFollowUpDisplayOrder,
   mergePinnedNewsIntoFollowUps,
   notifyFollowUpUpdated,
   readFollowUpItems,
@@ -37,6 +39,19 @@ type FollowUpTreeRow = {
   item: FollowUpItem;
   level: number;
   childCount: number;
+};
+
+type TouchDropTarget = {
+  id: string;
+  mode: "before" | "after" | "inside";
+};
+
+type TouchDragState = {
+  id: string;
+  isDragging: boolean;
+  pointerId: number;
+  startX: number;
+  startY: number;
 };
 
 const buildChildrenMap = (items: FollowUpItem[]) => {
@@ -171,6 +186,10 @@ export default function EditorDesk() {
   const [copyStatus, setCopyStatus] = useState("");
   const [keywordWindowHours, setKeywordWindowHours] = useState<RecentKeywordWindowHours>(12);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "fetching" | "updated" | "empty" | "failed">("idle");
+  const [touchDropTarget, setTouchDropTarget] = useState<TouchDropTarget | null>(null);
+  const touchDragRef = useRef<TouchDragState | null>(null);
+  const touchDropTargetRef = useRef<TouchDropTarget | null>(null);
+  const suppressNextTitleClickRef = useRef(false);
 
   const persistFollowUps = useCallback((nextItems: FollowUpItem[]) => {
     saveFollowUpItems(nextItems);
@@ -272,7 +291,9 @@ export default function EditorDesk() {
 
     if (!normalizedTitle) return;
 
-    persistFollowUps([...followUps, createManualFollowUp(normalizedTitle, date, manualLinkDraft)]);
+    const displayOrder = getNextFollowUpDisplayOrder(followUps, date, "manual", "top");
+
+    persistFollowUps([...followUps, createManualFollowUp(normalizedTitle, date, manualLinkDraft, displayOrder)]);
     setSelectedDate(date);
     setIsAddOpen(false);
   };
@@ -349,6 +370,52 @@ export default function EditorDesk() {
     });
   };
 
+  const moveItemNearTarget = (draggedId: string, targetId: string, position: "before" | "after") => {
+    if (!draggedId || draggedId === targetId) return;
+
+    const dateItems = followUps.filter((item) => item.date === selectedDate);
+    const itemsById = new Map(dateItems.map((item) => [item.id, item]));
+    const dragged = itemsById.get(draggedId);
+    const target = itemsById.get(targetId);
+    if (!dragged || !target) return;
+    if (getFollowUpPlacement(dragged) !== getFollowUpPlacement(target)) return;
+
+    const children = buildChildrenMap(dateItems);
+    const draggedSubtreeIds = getSubtreeIds(dragged.id, children);
+    if (draggedSubtreeIds.has(target.id)) return;
+
+    const nextParentId = target.parentId;
+    const nextLevel = nextParentId ? getItemLevel(target, itemsById) : 0;
+    const draggedDepth = getSubtreeDepth(dragged.id, children);
+    if (nextLevel + draggedDepth > MAX_NESTING_LEVEL) return;
+
+    const now = new Date().toISOString();
+    const placement = getFollowUpPlacement(target);
+    const siblings = dateItems
+      .filter((item) => item.id !== dragged.id && item.parentId === nextParentId && getFollowUpPlacement(item) === placement)
+      .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const targetIndex = siblings.findIndex((item) => item.id === target.id);
+    const insertIndex = targetIndex < 0 ? siblings.length : targetIndex + (position === "after" ? 1 : 0);
+    const reorderedSiblings = [...siblings.slice(0, insertIndex), { ...dragged, parentId: nextParentId }, ...siblings.slice(insertIndex)];
+    const orderById = new Map(reorderedSiblings.map((item, index) => [item.id, (index + 1) * 1000]));
+
+    persistFollowUps(
+      followUps.map((item) => {
+        const displayOrder = orderById.get(item.id);
+        if (item.id === dragged.id) {
+          return {
+            ...item,
+            parentId: nextParentId,
+            displayOrder,
+            updatedAt: now,
+          };
+        }
+        if (displayOrder !== undefined) return { ...item, displayOrder };
+        return item;
+      }),
+    );
+  };
+
   const moveItemToRoot = (draggedId: string) => {
     if (!draggedId) return;
 
@@ -357,6 +424,78 @@ export default function EditorDesk() {
 
     const now = new Date().toISOString();
     persistFollowUps(followUps.map((item) => (item.id === dragged.id ? { ...item, parentId: undefined, updatedAt: now } : item)));
+  };
+
+  const getTouchDropTarget = (clientX: number, clientY: number, draggedId: string): TouchDropTarget | null => {
+    const element = document.elementFromPoint(clientX, clientY);
+    const row = element?.closest<HTMLElement>("[data-follow-up-id]");
+    const targetId = row?.dataset.followUpId;
+
+    if (!row || !targetId || targetId === draggedId) return null;
+
+    const rect = row.getBoundingClientRect();
+    const relativeY = (clientY - rect.top) / Math.max(rect.height, 1);
+    const mode = relativeY < 0.25 ? "before" : relativeY > 0.75 ? "after" : "inside";
+
+    return { id: targetId, mode };
+  };
+
+  const handleTouchDragStart = (itemId: string, event: PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse" || event.button !== 0) return;
+
+    touchDragRef.current = {
+      id: itemId,
+      isDragging: false,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleTouchDragMove = (event: PointerEvent<HTMLElement>) => {
+    const drag = touchDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.isDragging && distance < 9) return;
+
+    drag.isDragging = true;
+    suppressNextTitleClickRef.current = true;
+    setDraggingId(drag.id);
+    touchDropTargetRef.current = getTouchDropTarget(event.clientX, event.clientY, drag.id);
+    setTouchDropTarget(touchDropTargetRef.current);
+    event.preventDefault();
+  };
+
+  const handleTouchDragEnd = (event: PointerEvent<HTMLElement>) => {
+    const drag = touchDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const target = touchDropTargetRef.current;
+
+    if (drag.isDragging) {
+      if (target) {
+        if (target.mode === "inside") moveItemUnderParent(drag.id, target.id);
+        else moveItemNearTarget(drag.id, target.id, target.mode);
+      }
+      window.setTimeout(() => {
+        suppressNextTitleClickRef.current = false;
+      }, 250);
+    }
+
+    touchDragRef.current = null;
+    touchDropTargetRef.current = null;
+    setDraggingId("");
+    setTouchDropTarget(null);
+  };
+
+  const handleTitleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!suppressNextTitleClickRef.current) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextTitleClickRef.current = false;
   };
 
   const openDateEdit = (item: FollowUpItem) => {
@@ -392,7 +531,10 @@ export default function EditorDesk() {
 
     return (
       <li
-        className={`selected-item follow-up-item level-${level} ${isParent ? "parent" : ""} ${draggingId === item.id ? "dragging" : ""}`}
+        className={`selected-item follow-up-item level-${level} ${isParent ? "parent" : ""} ${draggingId === item.id ? "dragging" : ""} ${
+          touchDropTarget?.id === item.id ? `touch-drop-${touchDropTarget.mode}` : ""
+        }`}
+        data-follow-up-id={item.id}
         draggable
         key={item.id}
         onDragEnd={() => setDraggingId("")}
@@ -405,7 +547,13 @@ export default function EditorDesk() {
         onDrop={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          moveItemUnderParent(event.dataTransfer.getData("text/plain") || draggingId, item.id);
+          const draggedItemId = event.dataTransfer.getData("text/plain") || draggingId;
+          if (event.altKey) {
+            moveItemUnderParent(draggedItemId, item.id);
+          } else {
+            const rect = event.currentTarget.getBoundingClientRect();
+            moveItemNearTarget(draggedItemId, item.id, event.clientY > rect.top + rect.height / 2 ? "after" : "before");
+          }
           setDraggingId("");
         }}
         style={{ "--follow-up-level": level } as CSSProperties}
@@ -428,11 +576,29 @@ export default function EditorDesk() {
             </button>
           ) : null}
           {link ? (
-            <a className="selected-title" href={link} rel="noopener noreferrer" target="_blank">
+            <a
+              className="selected-title follow-up-drag-handle"
+              href={link}
+              onClick={handleTitleClick}
+              onPointerCancel={handleTouchDragEnd}
+              onPointerDown={(event) => handleTouchDragStart(item.id, event)}
+              onPointerMove={handleTouchDragMove}
+              onPointerUp={handleTouchDragEnd}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               {item.title}
             </a>
           ) : (
-            <span className="selected-title">{item.title}</span>
+            <span
+              className="selected-title follow-up-drag-handle"
+              onPointerCancel={handleTouchDragEnd}
+              onPointerDown={(event) => handleTouchDragStart(item.id, event)}
+              onPointerMove={handleTouchDragMove}
+              onPointerUp={handleTouchDragEnd}
+            >
+              {item.title}
+            </span>
           )}
         </span>
         <button

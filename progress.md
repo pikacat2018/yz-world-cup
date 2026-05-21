@@ -150,3 +150,8 @@
 - Wired `newsStore` and `followUpStore` save helpers to push shared documents while preserving localStorage fallback.
 - `npm run build` passed after the shared online editing migration.
 - After first Cloudflare deployment, editor access failed because `/api/shared-state` needed an explicit Pages Function base route; added `functions/api/shared-state/index.ts`.
+- Started Follow-Up Ordering v1 for the third column: manual starred/manual items should appear above auto Reddit hot items, and rows should support manual drag reordering.
+- Re-read `EditorDesk`, `followUpStore`, `newsStore`, and `MessagePanel`; confirmed `sourcePinned: true` identifies auto-pinned Reddit hot entries while manual stars remain false/undefined.
+- Added `placement` and `displayOrder` metadata to follow-up items; manual/manual-starred items sort above auto source-pinned items, with manual insertions placed at the top and auto insertions at the bottom.
+- Updated third-column drag/drop so dropping on the upper/lower half of a row reorders within the same manual/auto group; Alt-drop still uses the existing nest-under-parent behavior.
+- `npm run build` passed after the follow-up ordering and drag-position changes.

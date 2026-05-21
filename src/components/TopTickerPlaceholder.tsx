@@ -1,68 +1,63 @@
-import { useEffect, useMemo, useState } from "react";
-import { allMatches } from "../data/mockWorldCup";
-import { readPinnedNewsIds, readStoredNewsItems } from "../news/newsStore";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { allMatches, getTeam, type Match } from "../data/mockWorldCup";
+import { FOLLOW_UP_UPDATED_EVENT, getLocalDateKey, readFollowUpItems, type FollowUpItem } from "../news/followUpStore";
+import { readStoredNewsItems } from "../news/newsStore";
 import { BOTTOM_TICKER_UPDATED_EVENT } from "../news/ticker";
-import type { NewsItem } from "../news/types";
 import type { AppTheme } from "./ThemeToggle";
 import ThemeToggle from "./ThemeToggle";
 
-const RECENT_WINDOW_MS = 6 * 60 * 60 * 1000;
-const STOP_WORDS = new Set([
-  "the",
-  "and",
-  "for",
-  "with",
-  "from",
-  "this",
-  "that",
-  "world",
-  "cup",
-  "世界杯",
-  "比赛",
-  "官方",
-]);
-
-const getItemTime = (item: NewsItem) => {
-  const time = new Date(item.publishedAt || item.fetchedAt).getTime();
-  return Number.isNaN(time) ? 0 : time;
+type TopTickerItem = {
+  id: string;
+  label: string;
+  text: string;
+  url?: string;
 };
 
-const getTrendingTerm = (items: NewsItem[]) => {
-  const counts = new Map<string, number>();
-  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
+const getMatchDateKey = (match: Match) => match.date.slice(0, 10);
 
-  items
-    .filter((item) => getItemTime(item) >= recentThreshold)
-    .flatMap((item) => (item.translatedTitle || item.title).match(/[\p{L}\p{N}]{2,}/gu) ?? [])
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2 && !STOP_WORDS.has(token.toLowerCase()))
-    .forEach((token) => counts.set(token, (counts.get(token) ?? 0) + 1));
-
-  const [topTerm] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
-  return topTerm ?? "sampling";
+const getMatchSideLabel = (match: Match, side: "home" | "away") => {
+  const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
+  const fallback = side === "home" ? match.homeLabel : match.awayLabel;
+  return teamId ? getTeam(teamId).name : (fallback ?? "待定");
 };
 
-const buildStatusItems = () => {
-  const pinnedIds = new Set(readPinnedNewsIds());
-  const storedItems = readStoredNewsItems();
-  const recentThreshold = Date.now() - RECENT_WINDOW_MS;
-  const recentItems = storedItems.filter((item) => getItemTime(item) >= recentThreshold);
-  const redditItems = recentItems.filter((item) => item.source === "reddit").length;
-  const zhibo8Items = recentItems.filter((item) => item.source === "zhibo8").length;
-  const xItems = recentItems.filter((item) => item.source === "x").length;
-  const pinnedCount = storedItems.filter((item) => pinnedIds.has(item.id)).length;
-  const liveCount = allMatches.filter((match) => match.status === "live").length;
-  const nextMatch = allMatches.find((match) => match.status !== "finished") ?? allMatches[0];
+const formatFinishedMatch = (match: Match) => {
+  const home = getMatchSideLabel(match, "home");
+  const away = getMatchSideLabel(match, "away");
+  return `${home} ${match.score ?? "完赛"} ${away}`;
+};
+
+const getFollowUpUrl = (item: FollowUpItem, newsUrlById: Map<string, string>) =>
+  item.externalUrl ?? item.url ?? (item.sourceNewsId ? newsUrlById.get(item.sourceNewsId) : undefined);
+
+const buildTopTickerItems = (): TopTickerItem[] => {
+  const today = getLocalDateKey();
+  const newsUrlById = new Map(
+    readStoredNewsItems()
+      .map((item) => [item.id, item.externalUrl ?? item.url] as const)
+      .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
+  );
+  const matchItems: TopTickerItem[] = allMatches
+    .filter((match) => match.status === "finished" && getMatchDateKey(match) === today)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.matchNo - b.matchNo)
+    .map((match) => ({
+      id: `match-${match.id}`,
+      label: "赛果",
+      text: formatFinishedMatch(match),
+    }));
+
+  const followUpItems: TopTickerItem[] = readFollowUpItems()
+    .filter((item) => item.date === today && item.status === "active")
+    .map((item) => ({
+      id: `follow-${item.id}`,
+      label: "跟进",
+      text: item.title,
+      url: getFollowUpUrl(item, newsUrlById),
+    }));
 
   return [
-    `MATCHDAY ${nextMatch?.date.slice(5) ?? "--"}`,
-    `LIVE ${liveCount}`,
-    `HOT ${recentItems.length}`,
-    `REDDIT ${redditItems}`,
-    `ZB8 ${zhibo8Items}`,
-    `X ${xItems}`,
-    `PIN ${pinnedCount}`,
-    `TRENDING: ${getTrendingTerm(storedItems)}`,
+    ...(matchItems.length > 0 ? matchItems : [{ id: "match-empty", label: "赛果", text: "今日暂无已完赛" }]),
+    ...(followUpItems.length > 0 ? followUpItems : [{ id: "follow-empty", label: "跟进", text: "今日暂无跟进" }]),
   ];
 };
 
@@ -72,19 +67,22 @@ type TopTickerPlaceholderProps = {
 };
 
 export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTickerPlaceholderProps) {
-  const [statusItems, setStatusItems] = useState<string[]>(buildStatusItems);
-  const statusCopy = useMemo(() => statusItems.join(" / "), [statusItems]);
+  const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(buildTopTickerItems);
+  const statusCopy = useMemo(() => tickerItems.map((item) => `${item.label}: ${item.text}`).join(" / "), [tickerItems]);
+  const animationDuration = useMemo(() => `${Math.max(26, tickerItems.length * 3)}s`, [tickerItems.length]);
 
   useEffect(() => {
-    const refreshTicker = () => setStatusItems(buildStatusItems());
+    const refreshTicker = () => setTickerItems(buildTopTickerItems());
 
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
+    window.addEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
     window.addEventListener("storage", refreshTicker);
 
     const intervalId = window.setInterval(refreshTicker, 60_000);
 
     return () => {
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
+      window.removeEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
       window.removeEventListener("storage", refreshTicker);
       window.clearInterval(intervalId);
     };
@@ -92,13 +90,52 @@ export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTicker
 
   return (
     <header className="top-ticker top-live-bar" aria-label="System status ticker">
-      <div className="ticker-label top-flash-label">STATUS</div>
-      <div className="system-ticker-content" title={statusCopy}>
-        {statusItems.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
+      <div className="ticker-label top-flash-label">英足滚动</div>
+      <div className="system-ticker-content" style={{ "--top-ticker-duration": animationDuration } as CSSProperties} title={statusCopy}>
+        <div className="system-ticker-track">
+          <TopTickerContent items={tickerItems} />
+          <TopTickerContent isDuplicate items={tickerItems} />
+        </div>
       </div>
       <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
     </header>
+  );
+}
+
+type TopTickerContentProps = {
+  isDuplicate?: boolean;
+  items: TopTickerItem[];
+};
+
+function TopTickerContent({ isDuplicate = false, items }: TopTickerContentProps) {
+  return (
+    <div className="system-ticker-group" aria-hidden={isDuplicate || undefined}>
+      {items.map((item) => {
+        const copy = (
+          <>
+            <span className="system-ticker-label">{item.label}</span>
+            <span className="system-ticker-divider">｜</span>
+            <span className="system-ticker-text">{item.text}</span>
+          </>
+        );
+
+        return item.url ? (
+          <a
+            className="system-ticker-item"
+            href={item.url}
+            key={item.id}
+            rel="noopener noreferrer"
+            tabIndex={isDuplicate ? -1 : undefined}
+            target="_blank"
+          >
+            {copy}
+          </a>
+        ) : (
+          <span className="system-ticker-item" key={item.id}>
+            {copy}
+          </span>
+        );
+      })}
+    </div>
   );
 }

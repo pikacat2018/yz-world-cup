@@ -331,6 +331,11 @@ export default function MessagePanel() {
       second: "2-digit",
     }).format(date);
   };
+  const feedDateLabel = new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
   const isCoolingDown = cooldownUntil > cooldownNow;
   const fetchStatusText =
@@ -351,8 +356,8 @@ export default function MessagePanel() {
     <section className={feedStatusText ? "message-panel has-feed-status" : "message-panel"} aria-label="实时消息流">
       <div className="message-title">
         <div className="message-title-copy">
-          <span className="eyebrow">NEWS FEED</span>
-          <h2>固定消息</h2>
+          <span className="eyebrow">{feedDateLabel}</span>
+          <h2>新闻抓取</h2>
         </div>
         <div className="news-sync-tools">
           <span className={`news-sync-status ${fetchStatus === "failed" ? "failed" : ""}`}>{fetchStatusText}</span>

@@ -17,14 +17,14 @@ export default function ThemeToggle({ onThemeChange, theme }: ThemeToggleProps) 
 
   return (
     <button
-      aria-label={`切换到${isLight ? "暗色" : "浅色"}主题`}
+      aria-label={`切换到${isLight ? "暗" : "浅"}主题`}
       aria-pressed={!isLight}
       className="theme-toggle"
       onClick={() => onThemeChange(nextTheme)}
-      title={`切换到${isLight ? "暗色" : "浅色"}主题`}
+      title={`切换到${isLight ? "暗" : "浅"}主题`}
       type="button"
     >
-      <span>{isLight ? "浅色" : "暗色"}</span>
+      <span>{isLight ? "暗" : "浅"}</span>
     </button>
   );
 }
