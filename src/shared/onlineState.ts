@@ -127,19 +127,48 @@ function applyDocument(document: SharedStateDocument) {
   return true;
 }
 
+function readLocalSharedValue(key: SharedStateKey) {
+  const storageKey = localStorageKeys[key];
+  const raw = window.localStorage.getItem(storageKey);
+
+  if (!raw) return { hasValue: false, value: null };
+
+  try {
+    const value = JSON.parse(raw) as unknown;
+    const hasValue = Array.isArray(value) ? value.length > 0 : value !== null && value !== undefined;
+
+    return { hasValue, value };
+  } catch {
+    return { hasValue: false, value: null };
+  }
+}
+
+function seedMissingRemoteDocuments(documents: SharedStateDocument[]) {
+  const remoteKeys = new Set(documents.map((document) => document.key));
+
+  for (const key of Object.keys(localStorageKeys) as SharedStateKey[]) {
+    if (remoteKeys.has(key)) continue;
+
+    const local = readLocalSharedValue(key);
+    if (local.hasValue) queueSharedStateSave(key, local.value);
+  }
+}
+
 export async function hydrateSharedState() {
   if (!SHARED_EDITING_ENABLED || !getEditorAccessCode()) return "disabled" satisfies SharedStateStatus;
 
   const payload = (await requestSharedState()) as { documents?: SharedStateDocument[] };
+  const documents = payload.documents ?? [];
   let changed = false;
 
   applyingRemoteState = true;
   try {
-    for (const document of payload.documents ?? []) changed = applyDocument(document) || changed;
+    for (const document of documents) changed = applyDocument(document) || changed;
   } finally {
     applyingRemoteState = false;
   }
 
+  seedMissingRemoteDocuments(documents);
   if (changed) dispatchSharedStateRefresh();
   return "ready" satisfies SharedStateStatus;
 }
