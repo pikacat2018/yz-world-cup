@@ -45,6 +45,7 @@ const refreshEvents = ["yz-world-cup-bottom-ticker-updated", "yz-world-cup-follo
 const remoteUpdatedAt = new Map<SharedStateKey, string>();
 const pushTimers = new Map<SharedStateKey, number>();
 let applyingRemoteState = false;
+let hasHydratedSharedState = false;
 
 export function isSharedEditingEnabled() {
   return SHARED_EDITING_ENABLED;
@@ -61,10 +62,16 @@ export function saveEditorAccessCode(code: string) {
 
 export function clearEditorAccessCode() {
   window.localStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
+  hasHydratedSharedState = false;
+  remoteUpdatedAt.clear();
 }
 
 export function isApplyingSharedState() {
   return applyingRemoteState;
+}
+
+export function hasCompletedInitialSharedHydration() {
+  return !SHARED_EDITING_ENABLED || !getEditorAccessCode() || hasHydratedSharedState;
 }
 
 export function dispatchSharedStateRefresh() {
@@ -168,6 +175,7 @@ export async function hydrateSharedState() {
     applyingRemoteState = false;
   }
 
+  hasHydratedSharedState = true;
   seedMissingRemoteDocuments(documents);
   if (changed) dispatchSharedStateRefresh();
   return "ready" satisfies SharedStateStatus;
@@ -202,7 +210,7 @@ export function startSharedStatePolling(onStatus?: (status: SharedStateStatus) =
 }
 
 export function queueSharedStateSave(key: SharedStateKey, value: unknown) {
-  if (!SHARED_EDITING_ENABLED || !getEditorAccessCode() || applyingRemoteState) return;
+  if (!SHARED_EDITING_ENABLED || !getEditorAccessCode() || applyingRemoteState || !hasHydratedSharedState) return;
 
   const existingTimer = pushTimers.get(key);
   if (existingTimer) window.clearTimeout(existingTimer);
@@ -211,10 +219,26 @@ export function queueSharedStateSave(key: SharedStateKey, value: unknown) {
     pushTimers.delete(key);
     void requestSharedState(`/${encodeURIComponent(key)}`, {
       body: JSON.stringify({ value }),
+      headers: {
+        "X-Shared-State-Base-Updated-At": remoteUpdatedAt.get(key) ?? "",
+      },
       method: "PUT",
-    }).catch((error) => {
-      console.warn("[shared-state] save failed", key, error);
-    });
+    })
+      .then((document) => {
+        const updatedAt =
+          document && typeof document === "object" && "updatedAt" in document && typeof document.updatedAt === "string"
+            ? document.updatedAt
+            : "";
+        if (updatedAt) remoteUpdatedAt.set(key, updatedAt);
+      })
+      .catch((error) => {
+        console.warn("[shared-state] save failed", key, error);
+        if (error instanceof SharedStateError && error.status === 409) {
+          void hydrateSharedState().catch((hydrateError) => {
+            console.warn("[shared-state] conflict refresh failed", hydrateError);
+          });
+        }
+      });
   }, PUSH_DEBOUNCE_MS);
 
   pushTimers.set(key, timerId);

@@ -1,10 +1,13 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type Ref, useEffect, useMemo, useRef, useState } from "react";
 import { allMatches, getTeam, type Match } from "../data/mockWorldCup";
 import { FOLLOW_UP_UPDATED_EVENT, getLocalDateKey, readFollowUpItems, type FollowUpItem } from "../news/followUpStore";
 import { readStoredNewsItems } from "../news/newsStore";
 import { BOTTOM_TICKER_UPDATED_EVENT } from "../news/ticker";
 import type { AppTheme } from "./ThemeToggle";
 import ThemeToggle from "./ThemeToggle";
+
+const TOP_TICKER_FALLBACK_DURATION = "180s";
+const TOP_TICKER_SPEED_PX_PER_SECOND = 100;
 
 type TopTickerItem = {
   id: string;
@@ -68,11 +71,9 @@ type TopTickerPlaceholderProps = {
 
 export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTickerPlaceholderProps) {
   const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(buildTopTickerItems);
+  const tickerContentRef = useRef<HTMLDivElement>(null);
+  const [animationDuration, setAnimationDuration] = useState(TOP_TICKER_FALLBACK_DURATION);
   const statusCopy = useMemo(() => tickerItems.map((item) => `${item.label}: ${item.text}`).join(" / "), [tickerItems]);
-  const animationDuration = useMemo(() => {
-    const textLength = tickerItems.reduce((total, item) => total + item.text.length, 0);
-    return `${Math.max(36, Math.min(112, textLength * 0.135))}s`;
-  }, [tickerItems]);
 
   useEffect(() => {
     const refreshTicker = () => setTickerItems(buildTopTickerItems());
@@ -91,12 +92,33 @@ export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTicker
     };
   }, []);
 
+  useEffect(() => {
+    const updateDuration = () => {
+      const width = tickerContentRef.current?.scrollWidth ?? 0;
+      if (width > 0) setAnimationDuration(`${(width / TOP_TICKER_SPEED_PX_PER_SECOND).toFixed(2)}s`);
+    };
+
+    updateDuration();
+
+    const tickerContent = tickerContentRef.current;
+    const resizeObserver =
+      tickerContent && typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateDuration) : undefined;
+
+    if (tickerContent) resizeObserver?.observe(tickerContent);
+    window.addEventListener("resize", updateDuration);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateDuration);
+    };
+  }, [tickerItems]);
+
   return (
     <header className="top-ticker top-live-bar" aria-label="System status ticker">
       <div className="ticker-label top-flash-label">英足滚动</div>
       <div className="system-ticker-content" style={{ "--top-ticker-duration": animationDuration } as CSSProperties} title={statusCopy}>
         <div className="system-ticker-track">
-          <TopTickerContent items={tickerItems} />
+          <TopTickerContent contentRef={tickerContentRef} items={tickerItems} />
           <TopTickerContent isDuplicate items={tickerItems} />
           <TopTickerContent isDuplicate items={tickerItems} />
         </div>
@@ -107,13 +129,14 @@ export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTicker
 }
 
 type TopTickerContentProps = {
+  contentRef?: Ref<HTMLDivElement>;
   isDuplicate?: boolean;
   items: TopTickerItem[];
 };
 
-function TopTickerContent({ isDuplicate = false, items }: TopTickerContentProps) {
+function TopTickerContent({ contentRef, isDuplicate = false, items }: TopTickerContentProps) {
   return (
-    <div className="system-ticker-group" aria-hidden={isDuplicate || undefined}>
+    <div className="system-ticker-group" aria-hidden={isDuplicate || undefined} ref={contentRef}>
       {items.map((item) => {
         const copy = (
           <>

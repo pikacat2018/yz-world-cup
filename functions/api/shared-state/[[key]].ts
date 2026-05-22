@@ -24,6 +24,8 @@ const json = (value: unknown, status = 200) =>
 
 const getAccessCode = (request: Request) => request.headers.get("X-Editor-Access-Code")?.trim() ?? "";
 
+const getBaseUpdatedAt = (request: Request) => request.headers.get("X-Shared-State-Base-Updated-At")?.trim() ?? "";
+
 const getSupabaseHeaders = (env: Env) => ({
   apikey: env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY ?? ""}`,
@@ -100,6 +102,38 @@ export const onRequest: PagesFunction<Env> = async ({ env, params, request }) =>
     const payload = (await request.json().catch(() => null)) as { value?: unknown } | null;
 
     if (!payload || !("value" in payload)) return json({ error: "missing_value" }, 400);
+
+    const baseUpdatedAt = getBaseUpdatedAt(request);
+    const currentResponse = await fetch(`${endpoint}?key=eq.${encodeURIComponent(key)}&select=updated_at`, {
+      headers: getSupabaseHeaders(env),
+    });
+
+    if (!currentResponse.ok) {
+      const detail = await currentResponse.text().catch(() => "");
+
+      return json(
+        {
+          detail: detail.slice(0, 220),
+          error: "supabase_read_failed",
+          supabaseStatus: currentResponse.status,
+        },
+        502,
+      );
+    }
+
+    const currentRows = (await currentResponse.json()) as Array<{ updated_at: string }>;
+    const currentUpdatedAt = currentRows[0]?.updated_at ?? "";
+
+    if (currentUpdatedAt !== baseUpdatedAt) {
+      return json(
+        {
+          currentUpdatedAt,
+          error: "shared_state_conflict",
+          message: "Remote state changed before this write; hydrate first and retry from the cloud version.",
+        },
+        409,
+      );
+    }
 
     const response = await fetch(endpoint, {
       body: JSON.stringify({

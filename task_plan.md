@@ -105,3 +105,19 @@ Replace the top status ticker content with today's finished match pairings plus 
 - Use `getLocalDateKey()` as the definition of "today" so the top ticker matches the follow-up editor date model.
 - Show compact empty states for missing match results or follow-up items instead of reverting to the old status metrics.
 - Backfill follow-up news links through `sourceNewsId` and `readStoredNewsItems()` when older follow-up records do not store URL fields directly.
+
+# Shared State Safety v1 Plan
+
+## Goal
+Guarantee shared-editing pages hydrate from the cloud before rendering editable state, and prevent stale clients from overwriting newer cloud documents.
+
+## Phases
+1. Inspect shared-state hydration, polling, save queue, and Cloudflare write endpoint. - complete
+2. Gate app rendering until initial cloud hydrate succeeds. - complete
+3. Add client and server version checks for shared-state writes. - complete
+4. Build and summarize behavior. - complete
+
+## Decisions
+- Do not render the editor dashboard while shared editing is enabled and the first cloud hydrate has not completed.
+- Do not queue cloud writes before initial hydrate.
+- Require each PUT to include the cloud `updatedAt` version it was based on; reject stale writes with 409.

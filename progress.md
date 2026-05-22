@@ -167,3 +167,9 @@
 - `npm run build` failed after this CSS-only mobile adjustment because existing `vite.config.ts` errors reference missing Reddit helper symbols; no build errors pointed at the modified ticker CSS.
 - Removed the Alt-drop requirement; row-edge drops now show an insertion gap and row-center drops show a translucent parent-target state.
 - `npm run build` passed after replacing the Alt interaction with visual drop zones.
+- Started Shared State Safety v1 to prevent stale local third-column data from overwriting the cloud on page open.
+- Added an editor-access gate that blocks dashboard rendering until the first shared-state hydrate succeeds; sync failures keep the user on a protective sync screen.
+- Added a shared-state save guard so no cloud PUT is queued before initial hydrate completes.
+- Added `X-Shared-State-Base-Updated-At` to cloud writes and server-side 409 conflict rejection when the cloud document has changed or an old client omits the current version.
+- First `npm run build` failed on a cleanup callback type mismatch in `EditorAccessGate`; fixed the callback type.
+- `npm run build` passed after the shared-state safety changes.
