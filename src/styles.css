@@ -93,6 +93,15 @@
   margin: 0;
 }
 
+.passive-workspace-panel {
+  max-width: 560px;
+  width: min(100%, 560px);
+}
+
+.passive-workspace-panel h1 {
+  white-space: nowrap;
+}
+
 .editor-access-panel input {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(188, 207, 232, 0.26);
