@@ -3,7 +3,7 @@ import { collectRedditForApi, type RedditVariant } from "./collectCore";
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     headers: {
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=120, s-maxage=120",
       "Content-Type": "application/json; charset=utf-8",
     },
     status,

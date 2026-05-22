@@ -127,6 +127,7 @@ export default function MessagePanel() {
   const isFetchingRef = useRef(false);
   const isLoadingMoreRef = useRef(false);
   const itemsRef = useRef<NewsItem[]>([]);
+  const lastAutoSyncAtRef = useRef(0);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -208,11 +209,25 @@ export default function MessagePanel() {
   }, [syncNews]);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      void syncNews("auto");
-    }, AUTO_SYNC_INTERVAL_MS);
+    const runAutoSync = () => {
+      if (document.hidden) return;
+      const now = Date.now();
+      if (now - lastAutoSyncAtRef.current < AUTO_SYNC_INTERVAL_MS) return;
 
-    return () => window.clearInterval(intervalId);
+      lastAutoSyncAtRef.current = now;
+      void syncNews("auto");
+    };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) runAutoSync();
+    };
+    const intervalId = window.setInterval(runAutoSync, AUTO_SYNC_INTERVAL_MS);
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [syncNews]);
 
   useEffect(() => {

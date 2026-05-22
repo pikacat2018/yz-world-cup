@@ -35,7 +35,7 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
 
     return new Response(await response.text(), {
       headers: {
-        "Cache-Control": "public, max-age=120",
+        "Cache-Control": "public, max-age=120, s-maxage=120",
         "Content-Type": "text/html; charset=utf-8",
       },
     });

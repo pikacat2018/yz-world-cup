@@ -29,7 +29,9 @@ export class SharedStateError extends Error {
 const SHARED_EDITING_ENABLED = import.meta.env.VITE_SHARED_EDITING === "true";
 const ACCESS_CODE_STORAGE_KEY = "yz-world-cup-editor-access-code";
 const API_BASE = "/api/shared-state";
-const POLL_INTERVAL_MS = 5_000;
+const VISIBLE_POLL_INTERVAL_MS = 60_000;
+const HIDDEN_POLL_INTERVAL_MS = 300_000;
+const RECENT_HYDRATE_SKIP_MS = 5_000;
 const PUSH_DEBOUNCE_MS = 250;
 
 const localStorageKeys: Record<SharedStateKey, string> = {
@@ -46,6 +48,7 @@ const remoteUpdatedAt = new Map<SharedStateKey, string>();
 const pushTimers = new Map<SharedStateKey, number>();
 let applyingRemoteState = false;
 let hasHydratedSharedState = false;
+let lastHydratedAt = 0;
 
 export function isSharedEditingEnabled() {
   return SHARED_EDITING_ENABLED;
@@ -176,6 +179,7 @@ export async function hydrateSharedState() {
   }
 
   hasHydratedSharedState = true;
+  lastHydratedAt = Date.now();
   seedMissingRemoteDocuments(documents);
   if (changed) dispatchSharedStateRefresh();
   return "ready" satisfies SharedStateStatus;
@@ -186,10 +190,21 @@ export function startSharedStatePolling(onStatus?: (status: SharedStateStatus) =
 
   let isStopped = false;
   let timeoutId = 0;
+  let isTicking = false;
+
+  const getNextPollDelay = () => (document.hidden ? HIDDEN_POLL_INTERVAL_MS : VISIBLE_POLL_INTERVAL_MS);
+  const scheduleNextTick = () => {
+    timeoutId = window.setTimeout(tick, getNextPollDelay());
+  };
 
   const tick = async () => {
-    if (isStopped) return;
+    if (isStopped || isTicking) return;
+    if (document.hidden) {
+      scheduleNextTick();
+      return;
+    }
 
+    isTicking = true;
     try {
       onStatus?.("syncing");
       await hydrateSharedState();
@@ -197,15 +212,28 @@ export function startSharedStatePolling(onStatus?: (status: SharedStateStatus) =
     } catch {
       onStatus?.(getEditorAccessCode() ? "error" : "locked");
     } finally {
-      if (!isStopped) timeoutId = window.setTimeout(tick, POLL_INTERVAL_MS);
+      isTicking = false;
+      if (!isStopped) scheduleNextTick();
     }
   };
 
-  void tick();
+  const handleVisibilityChange = () => {
+    if (document.hidden || isStopped) return;
+    window.clearTimeout(timeoutId);
+    void tick();
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  if (lastHydratedAt && Date.now() - lastHydratedAt < RECENT_HYDRATE_SKIP_MS) {
+    scheduleNextTick();
+  } else {
+    void tick();
+  }
 
   return () => {
     isStopped = true;
     window.clearTimeout(timeoutId);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
   };
 }
 
