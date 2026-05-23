@@ -10,9 +10,11 @@ const OLD_REDDIT_SOCCER_NEW_URL = "https://old.reddit.com/r/soccer/new/";
 const REDDIT_BASE_URL = "https://www.reddit.com";
 const OLD_REDDIT_BASE_URL = "https://old.reddit.com";
 const REDDIT_FETCH_LIMIT = 20;
+const REDDIT_NEW_EXISTING_BUFFER_COUNT = 3;
 
 type RedditListingVariant = "hot" | "new";
 type CollectRedditOptions = {
+  existingItems?: NewsItem[];
   forceRefresh?: boolean;
   variant?: RedditListingVariant;
 };
@@ -289,6 +291,30 @@ const getRedditDedupeKey = (item: NewsItem) => {
   return postId ? `reddit:${postId}` : `reddit:${item.title}:${item.url ?? ""}`;
 };
 
+const createKnownRedditItems = (items: NewsItem[] = []) =>
+  new Set(items.filter((item) => item.source === "reddit").map(getRedditDedupeKey));
+
+const trimRedditNewAtKnownItems = (items: NewsItem[], existingItems?: NewsItem[]) => {
+  const knownItems = createKnownRedditItems(existingItems);
+  if (knownItems.size === 0) return items;
+
+  const nextItems: NewsItem[] = [];
+  let existingHitCount = 0;
+
+  for (const item of items) {
+    if (item.sourceVariant !== "new") {
+      nextItems.push(item);
+      continue;
+    }
+
+    nextItems.push(item);
+    existingHitCount = knownItems.has(getRedditDedupeKey(item)) ? existingHitCount + 1 : 0;
+    if (existingHitCount >= REDDIT_NEW_EXISTING_BUFFER_COUNT) break;
+  }
+
+  return nextItems;
+};
+
 const mergeVariant = (a?: RedditSourceVariant, b?: RedditSourceVariant): RedditSourceVariant => {
   const variants = new Set([...(a?.split(",") ?? []), ...(b?.split(",") ?? [])]);
   const hasHot = variants.has("hot");
@@ -474,10 +500,11 @@ const fetchRedditStage = async (
   label: string,
   hotFetcher: () => Promise<NewsItem[]>,
   newFetcher: () => Promise<NewsItem[]>,
+  existingItems?: NewsItem[],
 ) => {
   const variants: RedditListingVariant[] = ["hot", "new"];
   const results = await Promise.allSettled([hotFetcher(), newFetcher()]);
-  const items = collectFulfilledItems(results);
+  const items = trimRedditNewAtKnownItems(collectFulfilledItems(results), existingItems);
 
   logSettledResults(label, variants, results);
 
@@ -489,9 +516,9 @@ const fetchRedditStage = async (
   return [];
 };
 
-export async function fallbackToOldRedditHtml(): Promise<NewsItem[]> {
+export async function fallbackToOldRedditHtml(existingItems?: NewsItem[]): Promise<NewsItem[]> {
   const results = await Promise.allSettled([fetchRedditHot(), fetchRedditNew()]);
-  const items = collectFulfilledItems(results);
+  const items = trimRedditNewAtKnownItems(collectFulfilledItems(results), existingItems);
 
   if (items.length > 0) {
     logRedditStatus("old.reddit HTML fallback success");
@@ -511,16 +538,22 @@ export function fallbackToMockReddit(): NewsItem[] {
 export async function fetchRedditSoccer(options: CollectRedditOptions = {}): Promise<NewsItem[]> {
   try {
     const collectedItems = await collectReddit("soccer", options);
-    if (collectedItems.length > 0) return mergeRedditHotAndNew(collectedItems);
+    const trimmedItems = trimRedditNewAtKnownItems(collectedItems, options.existingItems);
+    if (trimmedItems.length > 0) return mergeRedditHotAndNew(trimmedItems);
   } catch (error) {
     logRedditStatus("axios collector failed", describeFetchFailure(error));
   }
 
-  const localProxyJsonItems = await fetchRedditStage("local proxy JSON", fetchRedditLocalProxyJsonHot, fetchRedditLocalProxyJsonNew);
+  const localProxyJsonItems = await fetchRedditStage(
+    "local proxy JSON",
+    fetchRedditLocalProxyJsonHot,
+    fetchRedditLocalProxyJsonNew,
+    options.existingItems,
+  );
   if (localProxyJsonItems.length > 0) return localProxyJsonItems;
 
   logRedditStatus("local proxy JSON failed, maybe Node request still blocked by Reddit");
-  const htmlItems = await fallbackToOldRedditHtml();
+  const htmlItems = await fallbackToOldRedditHtml(options.existingItems);
   return htmlItems.length > 0 ? htmlItems : fallbackToMockReddit();
 }
 

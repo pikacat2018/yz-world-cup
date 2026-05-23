@@ -7,7 +7,7 @@ const ZHIBO8_WEB_NEWS_BASE_URL = "https://news.zhibo8.com";
 const ZHIBO8_LATEST_NEWS_LIMIT = 900;
 const ZHIBO8_DETAIL_TIME_CONCURRENCY = 8;
 const ZHIBO8_DETAIL_REPAIR_LIMIT = 20;
-const ZHIBO8_EXISTING_BUFFER_COUNT = 3;
+const ZHIBO8_EXISTING_BUFFER_COUNT = 10;
 
 type Zhibo8FetchOptions = {
   existingItems?: NewsItem[];

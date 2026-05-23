@@ -389,7 +389,7 @@ export async function fetchLatestNews(existingItems = readStoredNewsItems()): Pr
   const results = await Promise.allSettled([
     withTimeout(fetchZhibo8News({ existingItems }), SOURCE_FETCH_TIMEOUT_MS.zhibo8, "zhibo8"),
     withTimeout(fetchXNews(), SOURCE_FETCH_TIMEOUT_MS.x, "x"),
-    withTimeout(fetchRedditNews(), SOURCE_FETCH_TIMEOUT_MS.reddit, "reddit"),
+    withTimeout(fetchRedditNews({ existingItems }), SOURCE_FETCH_TIMEOUT_MS.reddit, "reddit"),
   ]);
   const items = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
   const hasAnySuccess = results.some((result) => result.status === "fulfilled");
