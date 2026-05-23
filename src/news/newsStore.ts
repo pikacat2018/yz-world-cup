@@ -527,7 +527,8 @@ export function mergeManualRedditHotItems(
 export async function loadNewsItems(): Promise<NewsItem[]> {
   reconcileRedditHotSeenState();
 
-  const latest = await fetchLatestNews();
+  const existingItems = readStoredNewsItems();
+  const latest = await fetchLatestNews(existingItems);
   const redditHotSeenKeys = new Set(readRedditHotSeenKeys());
   const nextRedditHotSeenKeys = new Set(redditHotSeenKeys);
   const latestAsHistory = latest.map((item) => {
@@ -547,7 +548,7 @@ export async function loadNewsItems(): Promise<NewsItem[]> {
 
   saveRedditHotSeenKeys([...nextRedditHotSeenKeys]);
   savePinnedNewsIds(pinnedIds);
-  const items = limitNewsItems(applyStoredNewsState(dedupeNewsItems(latestAsHistory)));
+  const items = limitNewsItems(applyStoredNewsState(dedupeNewsItems([...existingItems, ...latestAsHistory])));
   saveNewsItems(items);
   return items;
 }

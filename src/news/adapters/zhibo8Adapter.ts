@@ -1,13 +1,13 @@
 import type { NewsItem } from "../types";
 import { isZhibo8FootballByUrl } from "../footballFilter";
 
-const ZHIBO8_NEWS_URL = "https://m.zhibo8.com/news.htm";
+const ZHIBO8_NEWS_URL = "/api/zhibo8/news";
 const ZHIBO8_BASE_URL = "https://m.zhibo8.com";
 const ZHIBO8_WEB_NEWS_BASE_URL = "https://news.zhibo8.com";
-const ZHIBO8_LATEST_NEWS_LIMIT = 160;
+const ZHIBO8_LATEST_NEWS_LIMIT = 900;
 const ZHIBO8_DETAIL_TIME_CONCURRENCY = 8;
-const ZHIBO8_EXISTING_BUFFER_COUNT = 3;
 const ZHIBO8_DETAIL_REPAIR_LIMIT = 20;
+const ZHIBO8_EXISTING_BUFFER_COUNT = 3;
 
 type Zhibo8FetchOptions = {
   existingItems?: NewsItem[];
@@ -111,8 +111,8 @@ const parseChineseLocalTime = (value: string, fetchedAt: string) => {
 const parsePublishedAt = (text: string, fetchedAt: string, url = "") => {
   const fullDateMatch = text.match(/20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\s+\d{1,2}:\d{2}/);
   const shortDateMatch = text.match(/\b\d{1,2}[-/.]\d{1,2}\s+\d{1,2}:\d{2}\b/);
-  const relativeMinuteMatch = text.match(/(\d+)\s*分钟前/);
-  const relativeHourMatch = text.match(/(\d+)\s*小时前/);
+  const relativeMinuteMatch = text.match(/(\d+)\s*分钟(?:前)?/);
+  const relativeHourMatch = text.match(/(\d+)\s*小时(?:前)?/);
   const urlDate = parsePublishedAtFromUrl(url);
   const toRelativeIso = (amount: number, unitMs: number) => {
     const fetchedTime = new Date(fetchedAt).getTime();
@@ -157,7 +157,7 @@ const isFetchedAtTimestamp = (publishedAt: string, fetchedAt: string) => {
   return !Number.isNaN(publishedTime) && !Number.isNaN(fetchedTime) && Math.abs(publishedTime - fetchedTime) <= 5_000;
 };
 
-const isRelativeListTimeText = (value: string) => /(\d+)\s*(?:分钟|小时)前|刚刚|刚才/.test(value);
+const isRelativeListTimeText = (value: string) => /(\d+)\s*(?:分钟|小时)(?:前)?|刚刚|刚才/.test(value);
 
 const fetchZhibo8DetailPublishedAt = async (url: string, fetchedAt: string) => {
   try {
@@ -233,7 +233,7 @@ const getLatestNewsLinks = (document: Document) => {
 };
 
 export async function fetchZhibo8News(options: Zhibo8FetchOptions = {}): Promise<NewsItem[]> {
-  const response = await fetch(ZHIBO8_NEWS_URL, { mode: "cors" });
+  const response = await fetch(ZHIBO8_NEWS_URL);
 
   if (!response.ok) {
     throw new Error(`zhibo8 request failed: ${response.status}`);
@@ -261,7 +261,9 @@ export async function fetchZhibo8News(options: Zhibo8FetchOptions = {}): Promise
     const href = link.getAttribute("href") ?? "";
     const url = normalizeZhibo8Url(href) || undefined;
     const surroundingText = row.textContent?.replace(/\s+/g, " ").trim() ?? title;
-    const timeText = surroundingText.replace(title, " ").replace(/\s+/g, " ").trim();
+    const timeText =
+      row.querySelector(".pass_time")?.textContent?.replace(/\s+/g, " ").trim() ||
+      surroundingText.replace(title, " ").replace(/\s+/g, " ").trim();
 
     if (title.length >= 8) {
       if (!url) continue;

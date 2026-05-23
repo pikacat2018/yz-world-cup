@@ -150,6 +150,29 @@ const redditProxyPlugin = () => ({
         );
       }
     });
+    server.middlewares.use("/api/zhibo8/news", async (_request, response) => {
+      try {
+        const result = await axios.get<string>("https://m.zhibo8.com/news.htm", {
+          headers: zhibo8HtmlHeaders,
+          responseType: "text",
+          timeout: REQUEST_TIMEOUT_MS,
+        });
+
+        response.statusCode = 200;
+        response.setHeader("Cache-Control", "public, max-age=120, s-maxage=120");
+        response.setHeader("Content-Type", "text/html; charset=utf-8");
+        response.end(result.data);
+      } catch (error) {
+        response.statusCode = 502;
+        response.setHeader("Content-Type", "application/problem+json");
+        response.end(
+          JSON.stringify({
+            error: "zhibo8_news_failed",
+            reason: error instanceof Error ? error.message : "unknown zhibo8 news error",
+          }),
+        );
+      }
+    });
     server.middlewares.use("/api/zhibo8/detail", async (request, response) => {
       const url = new URL(request.url ?? "", "http://localhost");
       const detailUrl = url.searchParams.get("url") ?? "";
