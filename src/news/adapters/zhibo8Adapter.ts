@@ -4,8 +4,19 @@ import { isZhibo8FootballByUrl } from "../footballFilter";
 const ZHIBO8_NEWS_URL = "https://m.zhibo8.com/news.htm";
 const ZHIBO8_BASE_URL = "https://m.zhibo8.com";
 const ZHIBO8_WEB_NEWS_BASE_URL = "https://news.zhibo8.com";
-const ZHIBO8_LATEST_NEWS_LIMIT = 900;
+const ZHIBO8_LATEST_NEWS_LIMIT = 160;
 const ZHIBO8_DETAIL_TIME_CONCURRENCY = 8;
+const ZHIBO8_EXISTING_BUFFER_COUNT = 3;
+const ZHIBO8_DETAIL_REPAIR_LIMIT = 20;
+
+type Zhibo8FetchOptions = {
+  existingItems?: NewsItem[];
+};
+
+type KnownZhibo8Items = {
+  titles: Set<string>;
+  urls: Set<string>;
+};
 
 export function normalizeZhibo8Url(href: string): string {
   const trimmedHref = href.trim();
@@ -42,6 +53,42 @@ const createNewsId = (source: NewsItem["source"], title: string, url?: string) =
   }
 
   return `${source}-${hash.toString(36)}`;
+};
+
+const normalizeKnownUrl = (value?: string) => {
+  if (!value) return "";
+
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    url.search = "";
+    return url.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return value.trim().replace(/[#?].*$/, "").replace(/\/$/, "").toLowerCase();
+  }
+};
+
+const normalizeKnownTitle = (value?: string) => value?.trim().replace(/\s+/g, " ").toLowerCase() ?? "";
+
+const createKnownZhibo8Items = (items: NewsItem[] = []): KnownZhibo8Items =>
+  items.reduce<KnownZhibo8Items>(
+    (known, item) => {
+      if (item.source !== "zhibo8") return known;
+
+      const url = normalizeKnownUrl(item.url || item.externalUrl);
+      const title = normalizeKnownTitle(item.title);
+      if (url) known.urls.add(url);
+      if (title) known.titles.add(title);
+      return known;
+    },
+    { titles: new Set<string>(), urls: new Set<string>() },
+  );
+
+const isKnownZhibo8Item = (known: KnownZhibo8Items, item: Pick<NewsItem, "title" | "url">) => {
+  const url = normalizeKnownUrl(item.url);
+  const title = normalizeKnownTitle(item.title);
+
+  return Boolean((url && known.urls.has(url)) || (title && known.titles.has(title)));
 };
 
 const parsePublishedAtFromUrl = (url: string) => {
@@ -136,7 +183,13 @@ const fetchZhibo8DetailPublishedAt = async (url: string, fetchedAt: string) => {
 
 const applyDetailPublishedTimes = async (items: NewsItem[], detailTimeRepairIds = new Set<string>()) => {
   const nextItems = [...items];
+  const repairableIds = new Set<string>();
   let cursor = 0;
+
+  for (const item of nextItems) {
+    if (repairableIds.size >= ZHIBO8_DETAIL_REPAIR_LIMIT) break;
+    if (detailTimeRepairIds.has(item.id)) repairableIds.add(item.id);
+  }
 
   const worker = async () => {
     while (cursor < nextItems.length) {
@@ -147,6 +200,7 @@ const applyDetailPublishedTimes = async (items: NewsItem[], detailTimeRepairIds 
       if (
         !item.url ||
         !item.publishedAt ||
+        !repairableIds.has(item.id) ||
         (!detailTimeRepairIds.has(item.id) &&
           !isDateOnlyTimestamp(item.publishedAt) &&
           !isFetchedAtTimestamp(item.publishedAt, item.fetchedAt))
@@ -178,7 +232,7 @@ const getLatestNewsLinks = (document: Document) => {
   return Array.from(latestSection.querySelectorAll("li.lite"));
 };
 
-export async function fetchZhibo8News(): Promise<NewsItem[]> {
+export async function fetchZhibo8News(options: Zhibo8FetchOptions = {}): Promise<NewsItem[]> {
   const response = await fetch(ZHIBO8_NEWS_URL, { mode: "cors" });
 
   if (!response.ok) {
@@ -189,11 +243,16 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
   const document = new DOMParser().parseFromString(html, "text/html");
   const latestRows = getLatestNewsLinks(document);
   const fetchedAt = new Date().toISOString();
+  const knownItems = createKnownZhibo8Items(options.existingItems);
+  const hasKnownItems = knownItems.urls.size > 0 || knownItems.titles.size > 0;
 
   const items: NewsItem[] = [];
   const detailTimeRepairIds = new Set<string>();
+  let existingHitCount = 0;
 
   for (const row of latestRows) {
+    if (items.length >= ZHIBO8_LATEST_NEWS_LIMIT) break;
+
     const link = row.querySelector("h2 a") ?? row.querySelector("a[href]");
     if (!link) continue;
 
@@ -212,8 +271,7 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
       if (!webUrl || !isZhibo8FootballByUrl(webUrl)) continue;
       const publishedAt = parsePublishedAt(timeText, fetchedAt, webUrl);
       const id = createNewsId("zhibo8", title, webUrl);
-
-      items.push({
+      const item: NewsItem = {
         id,
         source: "zhibo8",
         title,
@@ -225,10 +283,15 @@ export async function fetchZhibo8News(): Promise<NewsItem[]> {
         feedSection: "latest",
         sourcePinned: false,
         pinned: false,
-      });
+      };
+      const isKnown = isKnownZhibo8Item(knownItems, item);
+
+      items.push(item);
       if (isRelativeListTimeText(timeText)) detailTimeRepairIds.add(id);
+      if (hasKnownItems) existingHitCount = isKnown ? existingHitCount + 1 : 0;
+      if (hasKnownItems && existingHitCount >= ZHIBO8_EXISTING_BUFFER_COUNT) break;
     }
   }
 
-  return applyDetailPublishedTimes(items.slice(0, ZHIBO8_LATEST_NEWS_LIMIT), detailTimeRepairIds);
+  return applyDetailPublishedTimes(items, detailTimeRepairIds);
 }

@@ -385,9 +385,9 @@ export function limitNewsItems(items: NewsItem[]): NewsItem[] {
   return sortNewsItems(items).slice(0, NEWS_FEED_CONFIG.maxStoredItems);
 }
 
-export async function fetchLatestNews(): Promise<NewsItem[]> {
+export async function fetchLatestNews(existingItems = readStoredNewsItems()): Promise<NewsItem[]> {
   const results = await Promise.allSettled([
-    withTimeout(fetchZhibo8News(), SOURCE_FETCH_TIMEOUT_MS.zhibo8, "zhibo8"),
+    withTimeout(fetchZhibo8News({ existingItems }), SOURCE_FETCH_TIMEOUT_MS.zhibo8, "zhibo8"),
     withTimeout(fetchXNews(), SOURCE_FETCH_TIMEOUT_MS.x, "x"),
     withTimeout(fetchRedditNews(), SOURCE_FETCH_TIMEOUT_MS.reddit, "reddit"),
   ]);
