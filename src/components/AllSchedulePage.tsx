@@ -66,6 +66,15 @@ const countryLabel = {
   mexico: "🇲🇽",
 } as const;
 
+const getSyncStatusText = (result: FifaSyncResult | null) => {
+  if (!result) {
+    return `上次同步：${getLastFifaSyncAt() ? new Date(getLastFifaSyncAt()!).toLocaleString("zh-CN") : "尚未同步"}`;
+  }
+
+  if (result.ok) return result.message;
+  return result.message.replace("。如果浏览器拦截跨域请求，需要后端代理执行官方同步。", "");
+};
+
 export default function AllSchedulePage() {
   const [syncResult, setSyncResult] = useState<FifaSyncResult | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -103,7 +112,7 @@ export default function AllSchedulePage() {
   }, [confirmedSelectedIds, progressFilter, teamFilter, timeFilter, venueFilter]);
 
   const resultDensity =
-    confirmedSelectedIds.length > 0
+    confirmedSelectedIds.length > 0 || teamFilter !== "all"
       ? "selected-list"
       : displayedMatches.length <= 1
         ? "one"
@@ -112,6 +121,7 @@ export default function AllSchedulePage() {
           : "many";
   const useBracketView =
     confirmedSelectedIds.length === 0 &&
+    teamFilter === "all" &&
     progressFilter !== "all" &&
     progressFilter !== "group" &&
     displayedMatches.length > 0 &&
@@ -122,6 +132,7 @@ export default function AllSchedulePage() {
   const secondHalfMatches = bracketMatches.slice(bracketSplit);
   const bracketClassName =
     `${progressFilter === "semi" ? "vertical" : displayedMatches.length <= 1 ? "single" : "halves"} stage-${progressFilter}`;
+  const syncStatusText = getSyncStatusText(syncResult);
 
   const runSync = async () => {
     setIsSyncing(true);
@@ -171,7 +182,7 @@ export default function AllSchedulePage() {
           }
         }}
       >
-        <div>
+        <div className="schedule-card-topline">
           <span className="match-no">M{String(match.matchNo).padStart(2, "0")}</span>
           <span className="schedule-meta">{match.groupId === "KO" ? "淘汰赛" : `${match.groupId} 组`} · {match.stage}</span>
         </div>
@@ -184,7 +195,14 @@ export default function AllSchedulePage() {
             <TeamName fallback={away.label} teamId={away.teamId} />
           </strong>
         </div>
-        <p>北京时间 {beijingTime.dateTime} · {match.venue}</p>
+        <div className="schedule-card-bottomline">
+          <time className="schedule-card-time" dateTime={beijingTime.dateTime}>
+            {beijingTime.dateLabel} {beijingTime.time}
+          </time>
+          <span className="schedule-card-venue" title={match.venue}>
+            {match.venue}
+          </span>
+        </div>
       </article>
     );
   };
@@ -201,20 +219,22 @@ export default function AllSchedulePage() {
           <button className="overview-button large" disabled={isSyncing} onClick={runSync} type="button">
             {isSyncing ? "同步中" : "手动同步"}
           </button>
+          <span className={`sync-inline-status ${syncResult?.ok ? "ok" : syncResult ? "failed" : ""}`} title={syncResult?.message ?? syncStatusText}>
+            {syncStatusText}
+          </span>
+          <a
+            className="sync-inline-link"
+            href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums"
+            rel="noreferrer"
+            target="_blank"
+          >
+            FIFA 官方赛程
+          </a>
           <button className="overview-button large" onClick={() => window.close()} type="button">
             关闭赛程
           </button>
         </div>
       </header>
-      <div className={`sync-status ${syncResult?.ok ? "ok" : ""}`}>
-        <span>
-          {syncResult?.message ??
-            `上次同步：${getLastFifaSyncAt() ? new Date(getLastFifaSyncAt()!).toLocaleString("zh-CN") : "尚未同步"}`}
-        </span>
-        <a href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums" rel="noreferrer" target="_blank">
-          FIFA 官方赛程
-        </a>
-      </div>
       <section className="schedule-filter-bar" aria-label="赛程筛选">
         <label>
           <span>赛程进度</span>

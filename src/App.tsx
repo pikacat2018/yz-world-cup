@@ -50,29 +50,30 @@ function EditorWorkspace({ onThemeChange, theme }: { onThemeChange: (theme: AppT
   );
 }
 
-function LockedEditorApp() {
-  const [theme, setTheme] = useState<AppTheme>(() => {
-    if (typeof window === "undefined") return "dark-editorial";
+function getInitialTheme(): AppTheme {
+  if (typeof window === "undefined") return "dark-editorial";
 
-    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isAppTheme(savedTheme) ? savedTheme : "dark-editorial";
-  });
+  const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return isAppTheme(savedTheme) ? savedTheme : "dark-editorial";
+}
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
-
+function LockedEditorApp({ onThemeChange, theme }: { onThemeChange: (theme: AppTheme) => void; theme: AppTheme }) {
   const activeTab = useSingleActiveTab();
   if (activeTab.status !== "active") {
     return <PassiveWorkspaceNotice onRetry={activeTab.tryTakeover} status={activeTab.status} />;
   }
 
-  return <EditorWorkspace onThemeChange={setTheme} theme={theme} />;
+  return <EditorWorkspace onThemeChange={onThemeChange} theme={theme} />;
 }
 
 export default function App() {
   const routePath = typeof window === "undefined" ? "/" : window.location.pathname;
+  const [theme, setTheme] = useState<AppTheme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   if (routePath === "/all-groups") {
     return <AllGroupsOverview />;
@@ -82,5 +83,5 @@ export default function App() {
     return <AllSchedulePage />;
   }
 
-  return <LockedEditorApp />;
+  return <LockedEditorApp onThemeChange={setTheme} theme={theme} />;
 }

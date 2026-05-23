@@ -5,6 +5,7 @@ import MessagePanel from "./MessagePanel";
 import RightRail from "./RightRail";
 import type { AppTheme } from "./ThemeToggle";
 import TopTickerPlaceholder from "./TopTickerPlaceholder";
+import type { Match } from "../data/mockWorldCup";
 
 type LayoutProps = {
   onThemeChange: (theme: AppTheme) => void;
@@ -24,6 +25,24 @@ const mobileColumns: Array<{ id: MobileColumn; label: string }> = [
 
 export default function Layout({ onThemeChange, selectedGroupId, theme, onSelectGroup }: LayoutProps) {
   const [activeMobileColumn, setActiveMobileColumn] = useState<MobileColumn>("news");
+  const [selectedMatch, setSelectedMatch] = useState<Match | undefined>();
+
+  const selectGroupFromRail = (groupId: string) => {
+    setSelectedMatch(undefined);
+    onSelectGroup(groupId);
+    setActiveMobileColumn("radar");
+  };
+
+  const selectGroupFromRadar = (groupId: string) => {
+    setSelectedMatch(undefined);
+    onSelectGroup(groupId);
+  };
+
+  const selectMatchFromSchedule = (match: Match) => {
+    setSelectedMatch(match);
+    if (match.groupId !== "KO") onSelectGroup(match.groupId);
+    setActiveMobileColumn("radar");
+  };
 
   return (
     <div className="app-shell">
@@ -44,14 +63,19 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
         </nav>
         <div className="columns">
           <div data-mobile-active={activeMobileColumn === "rail"} data-mobile-column="rail">
-            <RightRail />
+            <RightRail onSelectGroup={selectGroupFromRail} onSelectMatch={selectMatchFromSchedule} />
           </div>
           <div
             className="radar-detail-stack"
             data-mobile-active={activeMobileColumn === "radar"}
             data-mobile-column="radar"
           >
-            <GroupRadar selectedGroupId={selectedGroupId} onSelectGroup={onSelectGroup} />
+            <GroupRadar
+              selectedGroupId={selectedGroupId}
+              selectedMatch={selectedMatch}
+              onSelectGroup={selectGroupFromRadar}
+              onSelectMatch={setSelectedMatch}
+            />
           </div>
           <div data-mobile-active={activeMobileColumn === "editor"} data-mobile-column="editor">
             <EditorDesk />

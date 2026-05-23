@@ -9,7 +9,7 @@ export default function GroupDetail({ group }: GroupDetailProps) {
   return (
     <main className="panel group-detail">
       <section className="detail-section schedule-detail-section">
-        <MatchImpact group={group} />
+        <MatchImpact matches={group.matches} />
       </section>
     </main>
   );

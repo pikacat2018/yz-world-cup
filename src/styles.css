@@ -1915,19 +1915,21 @@ a.news-title:focus-visible {
 
 .all-schedule-page {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
   height: 100vh;
   overflow: hidden;
   padding: 10px;
-  background:
-    radial-gradient(circle at 50% -15%, rgba(58, 160, 255, 0.28), transparent 34%),
-    linear-gradient(135deg, #02040a 0%, #07152d 55%, #02040a 100%);
+  color: var(--text);
+  background: var(--bg-main);
 }
 
 .schedule-header-actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .overview-button:disabled {
@@ -1956,6 +1958,30 @@ a.news-title:focus-visible {
 
 .sync-status a {
   color: #ffe2a0;
+  white-space: nowrap;
+}
+
+.sync-inline-status {
+  min-width: 0;
+  max-width: min(44vw, 520px);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--type-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-inline-status.ok {
+  color: var(--green);
+}
+
+.sync-inline-status.failed {
+  color: #ffb4bd;
+}
+
+.sync-inline-link {
+  color: var(--gold);
+  font-size: var(--type-xs);
   white-space: nowrap;
 }
 
@@ -2133,23 +2159,39 @@ a.news-title:focus-visible {
   outline: none;
 }
 
-.schedule-page-card > div:first-child {
+.schedule-card-topline,
+.schedule-card-bottomline {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
-.schedule-page-grid.one .schedule-page-card > div:first-child,
-.schedule-page-grid.few .schedule-page-card > div:first-child {
+.schedule-card-bottomline {
+  align-items: flex-end;
+}
+
+.schedule-page-grid.one .schedule-card-topline,
+.schedule-page-grid.few .schedule-card-topline {
   align-items: center;
 }
 
-.schedule-page-card p {
+.schedule-card-time,
+.schedule-card-venue {
   overflow: hidden;
   color: #9ac7ff;
   font-size: var(--type-xs);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.schedule-card-time {
+  flex: 0 0 auto;
+}
+
+.schedule-card-venue {
+  min-width: 0;
+  text-align: right;
 }
 
 .schedule-page-teams {
@@ -2220,8 +2262,13 @@ a.news-title:focus-visible {
   text-align: center;
 }
 
-.schedule-page-grid.one .schedule-page-card p {
+.schedule-page-grid.one .schedule-card-bottomline {
   justify-self: center;
+  width: min(100%, 560px);
+}
+
+.schedule-page-grid.one .schedule-card-time,
+.schedule-page-grid.one .schedule-card-venue {
   font-size: var(--type-sm);
 }
 
@@ -2230,7 +2277,7 @@ a.news-title:focus-visible {
 }
 
 .schedule-page-grid.selected-list .schedule-page-card {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   width: min(100%, 720px);
   min-height: 0;
   padding: 16px;
@@ -2358,7 +2405,8 @@ a.news-title:focus-visible {
   padding: 7px 10px;
 }
 
-.schedule-bracket-view.stage-r32 .schedule-page-card p {
+.schedule-bracket-view.stage-r32 .schedule-card-time,
+.schedule-bracket-view.stage-r32 .schedule-card-venue {
   font-size: 0.68rem;
 }
 
@@ -2471,9 +2519,8 @@ a.news-title:focus-visible {
   min-height: 0;
   overflow: hidden;
   padding: 10px;
-  background:
-    radial-gradient(circle at 50% -15%, rgba(58, 160, 255, 0.28), transparent 34%),
-    linear-gradient(135deg, #02040a 0%, #07152d 55%, #02040a 100%);
+  color: var(--text);
+  background: var(--bg-main);
 }
 
 .all-groups-header {
@@ -2989,9 +3036,21 @@ a.news-title:focus-visible {
 
 .all-schedule-page,
 .all-groups-page {
-  background:
-    radial-gradient(circle at 50% -15%, rgba(143, 182, 216, 0.12), transparent 34%),
-    linear-gradient(135deg, #0c1118 0%, var(--bg-main) 55%, #0b1016 100%);
+  color: var(--text);
+  background: var(--bg-main);
+}
+
+.all-groups-header,
+.schedule-filter-bar,
+.all-group-card,
+.schedule-page-card {
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.all-group-row,
+.schedule-page-teams {
+  background: var(--bg-row);
 }
 
 .all-group-outlook {
@@ -3773,6 +3832,15 @@ a.news-title:focus-visible {
   flex: 0 0 271px;
   width: 271px;
   max-width: none;
+}
+
+.radar-title-tools {
+  flex: 1 1 auto;
+  align-items: center;
+}
+
+.radar-title-tools h2 {
+  order: 0;
 }
 
 .group-letter-grid.compact {
@@ -5133,12 +5201,13 @@ p {
 
 .radar-match-list {
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .radar-match-list .match-impact-stream {
-  height: 100%;
-  grid-template-rows: repeat(6, minmax(0, 1fr));
+  align-content: start;
+  grid-auto-rows: auto;
   gap: 5px;
   min-height: 0;
 }
@@ -5148,7 +5217,7 @@ p {
   padding-top: 17px;
   padding-bottom: 16px;
   background: var(--theme-row-bg);
-  min-height: 0;
+  min-height: 66px;
 }
 
 .radar-match-list .impact-row:nth-child(even) {
@@ -5159,6 +5228,49 @@ p {
   border-color: var(--theme-accent-display);
   color: #1f242b;
   background: var(--theme-accent-display);
+}
+
+.knockout-stage-select {
+  height: 24px;
+  min-width: 104px;
+  border: 1px solid var(--theme-divider-soft);
+  border-radius: 5px;
+  padding: 0 8px;
+  color: var(--theme-text-main);
+  background: var(--control-bg);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.knockout-stage-select:focus-visible {
+  border-color: var(--line-hot);
+  outline: none;
+}
+
+.knockout-summary-card {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.knockout-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--theme-divider-soft);
+  padding: 0 0 7px;
+  color: var(--theme-text-muted);
+  font-size: 0.68rem;
+}
+
+.knockout-stage-head span {
+  color: var(--theme-text-main);
+  font-weight: 800;
+}
+
+.knockout-stage-head strong {
+  color: var(--theme-accent-display);
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 0.66rem;
 }
 
 .schedule-panel .schedule-score-box {
@@ -5524,8 +5636,35 @@ p {
   background: rgba(255, 255, 255, 0.024);
 }
 
+.data-board-row.clickable-row {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.data-board-row.clickable-row:hover,
+.data-board-row.clickable-row:focus-visible {
+  outline: none;
+  background: rgba(168, 139, 82, 0.1);
+}
+
 .data-board-row.overview-row {
-  grid-template-columns: 58px minmax(0, 1.1fr) minmax(44px, 0.72fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) minmax(92px, 0.82fr) 48px;
+}
+
+.data-board-row.event-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.data-board-row.event-row strong {
+  color: #b89a5a;
+}
+
+.data-board-row.event-row b {
+  color: rgba(193, 200, 208, 0.96);
 }
 
 .data-board-row span {
@@ -5580,6 +5719,24 @@ p {
 .stat-section-list,
 .compact-stat-list {
   display: none;
+}
+
+/* Keep long data lists from changing the schedule panel's scroll behavior. */
+.right-rail {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow-y: hidden;
+}
+
+.schedule-panel {
+  min-height: 0;
+}
+
+.schedule-list {
+  overflow-y: visible;
+}
+
+.data-boards {
+  min-height: 0;
 }
 
 /* Current pass v4: balanced match queue meta line. */
@@ -5640,6 +5797,7 @@ p {
   row-gap: 0;
   min-height: 58px;
   padding: 8px;
+  cursor: pointer;
 }
 
 .schedule-match-no {
@@ -5754,6 +5912,7 @@ p {
 }
 
 .impact-stage,
+.impact-match-no,
 .impact-time,
 .impact-venue {
   position: absolute;
@@ -5772,19 +5931,27 @@ p {
 }
 
 .impact-time {
+  bottom: 8px;
+  left: 10px;
+  max-width: 118px;
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  text-align: left;
+}
+
+.impact-match-no {
   top: 8px;
   right: 10px;
-  max-width: 118px;
+  max-width: 62px;
   font-family: "Fira Code", "Noto Sans SC", monospace;
   text-align: right;
 }
 
 .impact-venue {
   bottom: 8px;
-  left: 10px;
+  right: 10px;
   display: block;
   max-width: 55%;
-  text-align: left;
+  text-align: right;
 }
 
 .impact-scoreline {
@@ -5829,6 +5996,82 @@ p {
   max-width: 118px;
 }
 
+.impact-goal-events {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+  gap: 3px 10px;
+  min-width: 0;
+  margin-top: 5px;
+  margin-bottom: 13px;
+  color: color-mix(in srgb, var(--theme-accent-display), var(--theme-text-muted) 24%);
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.impact-goal-event {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.impact-goal-event.home .impact-goal-player {
+  display: inline-flex;
+  gap: 4px;
+  grid-column: 1;
+  justify-self: end;
+  text-align: right;
+}
+
+.impact-goal-event.home .impact-goal-minute {
+  grid-column: 2;
+  text-align: center;
+}
+
+.impact-goal-event.away .impact-goal-minute {
+  grid-column: 2;
+  text-align: center;
+}
+
+.impact-goal-event.away .impact-goal-player {
+  display: inline-flex;
+  gap: 4px;
+  grid-column: 3;
+  justify-self: start;
+  text-align: left;
+}
+
+.impact-goal-player,
+.impact-goal-minute {
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impact-goal-minute {
+  color: color-mix(in srgb, var(--theme-text-muted), transparent 22%);
+}
+
+.impact-goal-player em {
+  display: inline-grid;
+  min-width: 20px;
+  height: 14px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--theme-accent-display), transparent 42%);
+  border-radius: 3px;
+  color: color-mix(in srgb, var(--theme-accent-display), #ffffff 16%);
+  background: color-mix(in srgb, var(--theme-accent-display), transparent 86%);
+  font-size: 0.54rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .impact-score {
   display: grid;
   height: 25px;
@@ -5839,6 +6082,101 @@ p {
   font-size: 0.76rem;
   font-weight: 800;
   background: rgba(168, 139, 82, 0.08);
+}
+
+.impact-penalty-score {
+  display: grid;
+  justify-self: center;
+  width: 48px;
+  height: 25px;
+  margin-top: 3px;
+  border: 1px solid color-mix(in srgb, var(--theme-accent-display), transparent 58%);
+  border-radius: 3px;
+  place-items: center;
+  color: color-mix(in srgb, var(--theme-accent-display), #ffffff 12%);
+  background: color-mix(in srgb, var(--theme-accent-display), transparent 88%);
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 0.76rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.impact-penalty-events {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+  gap: 3px 10px;
+  min-width: 0;
+  margin-top: 6px;
+  margin-bottom: 13px;
+  border-top: 1px solid color-mix(in srgb, var(--theme-divider-soft), transparent 32%);
+  padding-top: 5px;
+  color: color-mix(in srgb, var(--theme-text-main), var(--theme-text-muted) 25%);
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.impact-penalty-round {
+  display: grid;
+  grid-column: 1 / -1;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.impact-penalty-player,
+.impact-penalty-result,
+.impact-penalty-no {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.impact-penalty-player.home {
+  grid-column: 1;
+  justify-self: end;
+  text-align: right;
+}
+
+.impact-penalty-result.home {
+  position: absolute;
+  right: calc(50% + 10px);
+  width: 14px;
+  height: 16px;
+  overflow: visible;
+  line-height: 16px;
+  text-align: center;
+}
+
+.impact-penalty-no {
+  grid-column: 2;
+  color: var(--theme-text-muted);
+  text-align: center;
+}
+
+.impact-penalty-result.away {
+  position: absolute;
+  left: calc(50% + 10px);
+  width: 14px;
+  height: 16px;
+  overflow: visible;
+  line-height: 16px;
+  text-align: center;
+}
+
+.impact-penalty-player.away {
+  grid-column: 3;
+  justify-self: start;
+  text-align: left;
+}
+
+.impact-penalty-player {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .impact-match-meta {
@@ -6232,6 +6570,7 @@ p,
 .schedule-group-name,
 .schedule-date-time,
 .impact-stage,
+.impact-match-no,
 .impact-time,
 .impact-venue,
 .fact-layer li,
@@ -6264,6 +6603,14 @@ p,
 .impact-score,
 .schedule-score-box {
   color: var(--theme-accent-display);
+}
+
+.data-board-row.event-row strong {
+  color: var(--theme-accent-display);
+}
+
+.data-board-row.event-row b {
+  color: var(--theme-text-main);
 }
 
 .schedule-row,
@@ -6681,8 +7028,9 @@ p,
 .news-row-time {
   align-self: center;
   padding-top: 2px;
+  color: var(--theme-text-muted);
   font-size: 0.58rem;
-  opacity: 0.72;
+  opacity: 1;
 }
 
 /* Editor Watch: factual event stream, no pseudo-AI panels. */
@@ -6811,7 +7159,7 @@ p,
 
 /* Full schedule cards need wider team lanes than the compact dashboard queue. */
 .schedule-page-card .schedule-page-teams {
-  grid-template-columns: minmax(0, 1fr) 58px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1fr);
   justify-self: stretch;
   width: min(100%, 660px);
   gap: 12px;
@@ -6825,10 +7173,12 @@ p,
   gap: 6px;
 }
 
-.schedule-page-card > div:first-child,
+.schedule-card-topline,
+.schedule-card-bottomline,
 .schedule-page-card .match-no,
 .schedule-page-card .schedule-meta,
-.schedule-page-card p {
+.schedule-card-time,
+.schedule-card-venue {
   color: var(--text-primary);
   opacity: 1;
 }
@@ -6849,7 +7199,23 @@ p,
 
 .schedule-page-card .schedule-page-teams b,
 .schedule-page-card .schedule-page-teams.has-score b {
-  min-width: 58px;
+  min-width: 52px;
+  height: 24px;
+  border-color: var(--theme-accent-display);
+  border-radius: 4px;
+  color: #1f242b;
+  background: var(--theme-accent-display);
+  box-shadow: none;
+  font-size: 0.76rem;
+  line-height: 1;
+  text-shadow: none;
+}
+
+.schedule-panel .panel-title-row h2,
+.group-radar .panel-title-row h2,
+.editor-desk .panel-title-row h2,
+.message-panel .message-title h2 {
+  font-size: 0.94rem;
 }
 
 :root[data-theme="light-blue"] .radar-match-list .impact-score,

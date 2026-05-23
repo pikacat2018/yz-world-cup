@@ -1,20 +1,29 @@
-import type { Group } from "../data/mockWorldCup";
+import type { Match } from "../data/mockWorldCup";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
 
 type MatchImpactProps = {
-  group: Group;
+  matches: Match[];
 };
 
-export default function MatchImpact({ group }: MatchImpactProps) {
+export default function MatchImpact({ matches }: MatchImpactProps) {
   return (
     <div className="match-impact-stream">
-      {group.matches.map((match) => {
+      {matches.map((match) => {
         const beijingTime = getBeijingDateTime(match);
+        const scorerCounts = new Map<string, number>();
+        const goals = (match.goals ?? []).map((goal) => {
+          const scorerKey = `${goal.side}:${goal.player}`;
+          const count = (scorerCounts.get(scorerKey) ?? 0) + 1;
+          scorerCounts.set(scorerKey, count);
+
+          return { ...goal, count };
+        });
 
         return (
           <article className={`impact-row impact-${match.status}`} key={match.id}>
             <span className="impact-stage">{match.stage}</span>
+            <span className="impact-match-no">M{String(match.matchNo).padStart(2, "0")}</span>
             <time className="impact-time">
               {beijingTime.dateLabel} {beijingTime.time}
             </time>
@@ -27,6 +36,44 @@ export default function MatchImpact({ group }: MatchImpactProps) {
                 <TeamName fallback={match.awayLabel} teamId={match.awayTeamId} />
               </strong>
             </div>
+            {match.penaltyShootout ? (
+              <div className="impact-penalty-score">
+                {match.penaltyShootout.homeScore}-{match.penaltyShootout.awayScore}
+              </div>
+            ) : null}
+            {goals.length > 0 ? (
+              <div className="impact-goal-events" aria-label="进球事件">
+                {goals.map((goal, index) => (
+                  <div className={`impact-goal-event ${goal.side}`} key={`${goal.minute}-${goal.player}-${index}`}>
+                    <span className="impact-goal-player">
+                      {goal.side === "home" && goal.ownGoal ? <em>OG</em> : null}
+                      {goal.side === "home" && !goal.ownGoal && goal.count > 1 ? <em>{goal.count}x</em> : null}
+                      <span>{goal.player}</span>
+                      {goal.side === "away" && !goal.ownGoal && goal.count > 1 ? <em>x{goal.count}</em> : null}
+                      {goal.side === "away" && goal.ownGoal ? <em>OG</em> : null}
+                    </span>
+                    <span className="impact-goal-minute">{goal.minute}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {match.penaltyShootout ? (
+              <div className="impact-penalty-events" aria-label="点球大战">
+                {match.penaltyShootout.rounds.map((round) => (
+                  <div className="impact-penalty-round" key={round.round}>
+                    <span className="impact-penalty-player home">{round.home?.player ?? ""}</span>
+                    <span className="impact-penalty-result home">
+                      {round.home ? (round.home.scored ? "✅" : "❌") : ""}
+                    </span>
+                    <span className="impact-penalty-no">{round.round}</span>
+                    <span className="impact-penalty-result away">
+                      {round.away ? (round.away.scored ? "✅" : "❌") : ""}
+                    </span>
+                    <span className="impact-penalty-player away">{round.away?.player ?? ""}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="impact-venue" title={match.venue}>
               {match.venue}
             </div>

@@ -24,7 +24,11 @@ const getStageLabel = (match: Match) => {
   return match.stage;
 };
 
-export default function SchedulePanel() {
+type SchedulePanelProps = {
+  onSelectMatch: (match: Match) => void;
+};
+
+export default function SchedulePanel({ onSelectMatch }: SchedulePanelProps) {
   const matchDates = useMemo(
     () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).date))),
     [],
@@ -91,7 +95,20 @@ export default function SchedulePanel() {
           const stageLabel = getStageLabel(match);
 
           return (
-            <article className={`schedule-row schedule-${match.status}`} key={match.id}>
+            <article
+              aria-label={`查看 M${String(match.matchNo).padStart(2, "0")} 所在比赛列表`}
+              className={`schedule-row schedule-${match.status}`}
+              key={match.id}
+              onClick={() => onSelectMatch(match)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onSelectMatch(match);
+                }
+              }}
+              role="button"
+              tabIndex={0}
+            >
               <span className="match-no schedule-match-no">M{String(match.matchNo).padStart(2, "0")}</span>
               <span className="schedule-group-name" title={stageLabel}>
                 {stageLabel}

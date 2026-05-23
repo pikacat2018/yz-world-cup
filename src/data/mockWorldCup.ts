@@ -32,7 +32,33 @@ export type Match = {
   venue: string;
   status: "scheduled" | "live" | "finished";
   score?: string;
+  goals?: MatchGoal[];
+  penaltyShootout?: PenaltyShootout;
   note: string;
+};
+
+export type MatchGoal = {
+  side: "home" | "away";
+  minute: string;
+  ownGoal?: boolean;
+  player: string;
+};
+
+export type PenaltyShootout = {
+  homeScore: number;
+  awayScore: number;
+  rounds: PenaltyRound[];
+};
+
+export type PenaltyRound = {
+  home?: PenaltyKick;
+  round: number;
+  away?: PenaltyKick;
+};
+
+export type PenaltyKick = {
+  player: string;
+  scored: boolean;
 };
 
 export type Group = {
@@ -50,6 +76,8 @@ export type PlayerStat = {
   rank: number;
   player: string;
   team: string;
+  match?: string;
+  matchNo?: number;
   goals?: number;
   assists?: number;
   yellowCards?: number;
@@ -60,6 +88,7 @@ export type StoryEvent = {
   label: string;
   value: string;
   detail: string;
+  groupId?: string;
 };
 
 const flagByCode: Record<string, string> = {
@@ -403,14 +432,81 @@ const knockoutFixtures: Match[] = [
   { id: "ko-104", matchNo: 104, groupId: "KO", date: "2026-07-19 15:00", stage: "决赛", homeLabel: "M101 胜者", awayLabel: "M102 胜者", venue: "New York New Jersey Stadium", status: "scheduled", note: "决赛，官方编号 M104。" },
 ];
 
+const simulatedGoals = (matchNo: number): MatchGoal[] | undefined => {
+  const goalsByMatchNo: Record<number, MatchGoal[]> = {
+    1: [
+      { side: "home", minute: "24'", player: "Jimenez" },
+      { side: "away", minute: "35'", player: "Tau" },
+      { side: "home", minute: "67'", player: "Jimenez" },
+      { side: "away", minute: "76'", player: "Tau" },
+      { side: "home", minute: "81'", player: "Lozano" },
+      { side: "away", minute: "81'", player: "Mokoena" },
+    ],
+    2: [
+      { side: "away", minute: "18'", player: "Schick" },
+      { side: "home", minute: "44'", player: "Son" },
+      { side: "away", minute: "58'", player: "Hlozek" },
+    ],
+    25: [
+      { side: "home", minute: "12'", player: "Soucek" },
+      { side: "home", minute: "29'", player: "Schick" },
+      { side: "away", minute: "72'", player: "Mokoena" },
+    ],
+    28: [
+      { side: "away", minute: "21'", player: "Lee" },
+      { side: "home", minute: "39'", player: "Lozano" },
+      { side: "home", minute: "64'", player: "Kim", ownGoal: true },
+      { side: "away", minute: "88'", player: "Son" },
+    ],
+    53: [
+      { side: "away", minute: "16'", player: "Jimenez" },
+      { side: "home", minute: "52'", player: "Schick" },
+      { side: "away", minute: "77'", player: "Lozano" },
+    ],
+    54: [
+      { side: "away", minute: "9'", player: "Son" },
+      { side: "home", minute: "33'", player: "Foster" },
+      { side: "away", minute: "61'", player: "Hwang" },
+      { side: "home", minute: "90+1'", player: "Tau" },
+    ],
+  };
+
+  return goalsByMatchNo[matchNo];
+};
+
+const scoreFromGoals = (goals: MatchGoal[]) => {
+  const home = goals.filter((goal) => goal.side === "home").length;
+  const away = goals.filter((goal) => goal.side === "away").length;
+  return `${home}-${away}`;
+};
+
+const simulatedPenaltyShootout = (matchNo: number): PenaltyShootout | undefined => {
+  if (matchNo !== 104) return undefined;
+
+  return {
+    homeScore: 4,
+    awayScore: 3,
+    rounds: [
+      { round: 1, home: { player: "Mbappe", scored: true }, away: { player: "Messi", scored: true } },
+      { round: 2, home: { player: "Griezmann", scored: true }, away: { player: "Alvarez", scored: false } },
+      { round: 3, home: { player: "Camavinga", scored: false }, away: { player: "Mac Allister", scored: true } },
+      { round: 4, home: { player: "Tchouameni", scored: true }, away: { player: "Dybala", scored: true } },
+      { round: 5, home: { player: "Kolo Muani", scored: true }, away: { player: "Lautaro", scored: false } },
+    ],
+  };
+};
+
 const buildMatches = (groupId: string): Match[] =>
   officialFixtures
     .filter((fixture) => fixture.groupId === groupId)
     .map((fixture, index) => {
+      const goals = simulatedGoals(fixture.matchNo);
+
       return {
         ...fixture,
         id: `${groupId}-m${index + 1}`,
-        score: simulatedScore(fixture.matchNo),
+        score: goals ? scoreFromGoals(goals) : simulatedScore(fixture.matchNo),
+        goals,
         status: "finished",
         note:
           fixture.stage === "第 3 轮"
@@ -427,7 +523,20 @@ const simulatedScore = (matchNo: number) => {
 
 const simulatedKnockoutResults: Record<
   number,
-  Partial<Pick<Match, "homeTeamId" | "awayTeamId" | "homeLabel" | "awayLabel" | "score" | "status" | "note">>
+  Partial<
+    Pick<
+      Match,
+      | "goals"
+      | "homeTeamId"
+      | "awayTeamId"
+      | "homeLabel"
+      | "awayLabel"
+      | "penaltyShootout"
+      | "score"
+      | "status"
+      | "note"
+    >
+  >
 > = {
   73: { homeTeamId: "mex", awayTeamId: "can" },
   74: { homeTeamId: "ger", awayTeamId: "jpn" },
@@ -460,7 +569,16 @@ const simulatedKnockoutResults: Record<
   101: { homeTeamId: "fra", awayTeamId: "esp" },
   102: { homeTeamId: "arg", awayTeamId: "mar" },
   103: { homeTeamId: "esp", awayTeamId: "mar" },
-  104: { homeTeamId: "fra", awayTeamId: "arg" },
+  104: {
+    homeTeamId: "fra",
+    awayTeamId: "arg",
+    score: "1-1",
+    goals: [
+      { side: "home", minute: "18'", player: "Mbappe" },
+      { side: "away", minute: "72'", player: "Messi" },
+    ],
+    penaltyShootout: simulatedPenaltyShootout(104),
+  },
 };
 
 const knockoutMatches = knockoutFixtures.map((match) => ({
@@ -531,22 +649,25 @@ export const playerStats = {
     { rank: 4, player: "卡塞米罗", team: "巴西", yellowCards: 2, redCards: 0 },
     { rank: 5, player: "阿坎吉", team: "瑞士", yellowCards: 1, redCards: 1 },
   ] satisfies PlayerStat[],
+  singleMatchGoals: [
+    { rank: 1, player: "基利安·姆巴佩", team: "法国", matchNo: 42, goals: 3 },
+    { rank: 2, player: "维尼修斯", team: "巴西", matchNo: 49, goals: 2 },
+    { rank: 3, player: "哈里·凯恩", team: "英格兰", matchNo: 45, goals: 2 },
+  ] satisfies PlayerStat[],
 };
 
 export const storyEvents: StoryEvent[] = [
-  { label: "第一支出线队", value: "法国", detail: "两连胜锁定前二" },
-  { label: "第一支出局队", value: "新西兰", detail: "两轮后提前无缘晋级" },
-  { label: "第一粒进球", value: "加拿大 12'", detail: "揭幕战首开纪录" },
-  { label: "第一张黄牌", value: "阿马杜", detail: "A 组第 18 分钟" },
-  { label: "第一张红牌", value: "奥塔门迪", detail: "战术犯规被罚下" },
-  { label: "第 50 个进球", value: "维尔茨", detail: "德国禁区前低射" },
-  { label: "第 100 个进球", value: "姆巴佩", detail: "法国反击破门" },
-  { label: "最快进球", value: "莱奥 02'", detail: "葡萄牙开场闪击" },
-  { label: "最大冷门", value: "日本 2-1 瑞士", detail: "改写 A 组头名走势" },
-  { label: "最大比分胜利", value: "葡萄牙 5-0 中国", detail: "J 组净胜球拉开" },
-  { label: "最年轻进球者", value: "恩德里克", detail: "18 岁刷新本届纪录" },
-  { label: "最老进球者", value: "梅西", detail: "任意球保住头名" },
-  { label: "VAR 争议", value: "H 组补时点球", detail: "赛后官方说明" },
+  { label: "第一支出线队", value: "法国", detail: "两连胜锁定前二", groupId: "I" },
+  { label: "第一支出局队", value: "新西兰", detail: "两轮后提前无缘晋级", groupId: "G" },
+  { label: "第一粒进球", value: "加拿大 12'", detail: "揭幕战首开纪录", groupId: "B" },
+  { label: "第一张黄牌", value: "阿马杜", detail: "A 组第 18 分钟", groupId: "A" },
+  { label: "第一张红牌", value: "奥塔门迪", detail: "战术犯规被罚下", groupId: "J" },
+  { label: "第 50 个进球", value: "维尔茨", detail: "德国禁区前低射", groupId: "E" },
+  { label: "第 100 个进球", value: "姆巴佩", detail: "法国反击破门", groupId: "I" },
+  { label: "最快进球", value: "莱奥 02'", detail: "葡萄牙开场闪击", groupId: "K" },
+  { label: "最大比分胜利", value: "葡萄牙 5-0 中国", detail: "J 组净胜球拉开", groupId: "J" },
+  { label: "最年轻进球者", value: "恩德里克", detail: "18 岁刷新本届纪录", groupId: "C" },
+  { label: "最老进球者", value: "梅西", detail: "任意球保住头名", groupId: "J" },
 ];
 
 export const tickerItems = {
