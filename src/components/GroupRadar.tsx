@@ -11,7 +11,7 @@ export default function GroupRadar({ selectedGroupId, onSelectGroup }: GroupRada
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
 
   const openAllGroups = () => {
-    window.open("/all-groups", "_blank", "noopener,noreferrer");
+    window.open("/all-groups", "_blank");
   };
 
   return (

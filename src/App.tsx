@@ -50,7 +50,7 @@ function EditorWorkspace({ onThemeChange, theme }: { onThemeChange: (theme: AppT
   );
 }
 
-export default function App() {
+function LockedEditorApp() {
   const [theme, setTheme] = useState<AppTheme>(() => {
     if (typeof window === "undefined") return "dark-editorial";
 
@@ -68,13 +68,19 @@ export default function App() {
     return <PassiveWorkspaceNotice onRetry={activeTab.tryTakeover} status={activeTab.status} />;
   }
 
-  if (window.location.pathname === "/all-groups") {
+  return <EditorWorkspace onThemeChange={setTheme} theme={theme} />;
+}
+
+export default function App() {
+  const routePath = typeof window === "undefined" ? "/" : window.location.pathname;
+
+  if (routePath === "/all-groups") {
     return <AllGroupsOverview />;
   }
 
-  if (window.location.pathname === "/schedule") {
+  if (routePath === "/schedule") {
     return <AllSchedulePage />;
   }
 
-  return <EditorWorkspace onThemeChange={setTheme} theme={theme} />;
+  return <LockedEditorApp />;
 }
