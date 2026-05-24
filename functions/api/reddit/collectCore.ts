@@ -93,9 +93,9 @@ const shouldKeepPost = (title: string, flair = "") => {
 };
 
 const redditListingUrls = (subreddit: string, variant: RedditVariant) => [
-  `https://api.reddit.com/r/${subreddit}/${variant}?limit=50&raw_json=1`,
-  `https://www.reddit.com/r/${subreddit}/${variant}.json?limit=50&raw_json=1`,
-  `https://old.reddit.com/r/${subreddit}/${variant}.json?limit=50&raw_json=1`,
+  `https://api.reddit.com/r/${subreddit}/${variant}?limit=30&raw_json=1`,
+  `https://www.reddit.com/r/${subreddit}/${variant}.json?limit=30&raw_json=1`,
+  `https://old.reddit.com/r/${subreddit}/${variant}.json?limit=30&raw_json=1`,
 ];
 
 const redditAtomUrls = (subreddit: string, variant: RedditVariant) =>
