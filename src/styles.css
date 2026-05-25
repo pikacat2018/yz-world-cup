@@ -1306,6 +1306,22 @@ p {
   opacity: 0.55;
 }
 
+.news-sync-tools .news-clear-new-button {
+  width: auto;
+  min-width: 26px;
+  padding: 0 7px;
+  color: var(--theme-accent-display);
+  font-family: "Fira Code", "Noto Sans SC", monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.news-sync-tools .news-clear-new-button:disabled {
+  color: var(--theme-text-muted);
+  background: transparent;
+}
+
 .news-refresh-icon {
   width: 18px;
   height: 18px;
@@ -6982,16 +6998,27 @@ p,
 }
 
 .news-row.unread-new {
-  background: transparent;
+  border-bottom-color: color-mix(in srgb, var(--theme-accent-display), var(--theme-divider-soft) 66%);
+  background: color-mix(in srgb, var(--theme-accent-display), transparent 91%);
 }
 
 .news-row.unread-new::before {
   display: block;
-  top: 7px;
-  bottom: 7px;
+  top: 6px;
+  bottom: 6px;
   left: 0;
-  width: 2px;
+  width: 3px;
   background: var(--theme-accent-display);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--theme-accent-display), transparent 42%);
+}
+
+.news-row.unread-new .news-title {
+  color: var(--theme-text-main);
+  font-weight: 650;
+}
+
+.news-row.unread-new .news-row-time {
+  color: color-mix(in srgb, var(--theme-text-main), var(--theme-text-muted) 35%);
 }
 
 .news-source-dot {
@@ -7635,7 +7662,7 @@ p,
 }
 
 .follow-up-item {
-  grid-template-columns: 24px 6px minmax(0, 1fr) 20px 22px;
+  grid-template-columns: 18px 6px minmax(0, 1fr) 20px 22px;
   padding-left: calc(var(--follow-up-level, 0) * 16px);
   transition:
     background 140ms ease,
@@ -7650,6 +7677,72 @@ p,
 
 .follow-up-item.dragging {
   opacity: 0.48;
+}
+
+.follow-up-item.done {
+  opacity: 0.52;
+  background: color-mix(in srgb, var(--theme-bg-surface) 44%, transparent);
+}
+
+.follow-up-item.done .selected-title {
+  color: var(--theme-text-muted);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: color-mix(in srgb, var(--theme-text-muted) 72%, transparent);
+}
+
+.follow-up-check {
+  align-self: center;
+  display: grid;
+  width: 18px;
+  height: 22px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.follow-up-check input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.follow-up-check span {
+  display: grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--theme-accent-display), transparent 62%);
+  border-radius: 3px;
+  background: var(--theme-score-bg);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--theme-bg-panel) 58%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent-display), transparent 82%);
+}
+
+.follow-up-check:hover span {
+  border-color: color-mix(in srgb, var(--theme-accent-display), transparent 42%);
+  background: color-mix(in srgb, var(--theme-score-bg) 74%, var(--theme-accent-display) 26%);
+}
+
+.follow-up-check input:checked + span {
+  border-color: color-mix(in srgb, var(--theme-accent-display) 76%, var(--theme-control-border));
+  background: color-mix(in srgb, var(--theme-accent-display) 22%, var(--theme-control-bg));
+}
+
+.follow-up-check input:checked + span::after {
+  color: var(--theme-accent-display);
+  content: "✓";
+  font-size: 0.62rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.follow-up-check:focus-within span {
+  outline: 1px solid var(--theme-accent-display);
+  outline-offset: 2px;
 }
 
 .follow-up-drag-handle {

@@ -173,3 +173,8 @@
 - Added `X-Shared-State-Base-Updated-At` to cloud writes and server-side 409 conflict rejection when the cloud document has changed or an old client omits the current version.
 - First `npm run build` failed on a cleanup callback type mismatch in `EditorAccessGate`; fixed the callback type.
 - `npm run build` passed after the shared-state safety changes.
+- Started Follow-Up Completion/Edit v1 for third-column manual item editing and row completion checkboxes.
+- Changed follow-up sorting to include `done` rows instead of filtering them out, with manual rows still prioritized over auto rows and done rows ranked after active rows in the same placement group.
+- Added row checkboxes that toggle `status` without removing the item, preserving `sourceNewsId` dedupe so completed auto-captured items are not fetched into the third column again.
+- Extended the existing date edit modal for manual items to edit title, link, and date together.
+- `npm run build` passed after the third-column completion checkbox and manual edit changes.

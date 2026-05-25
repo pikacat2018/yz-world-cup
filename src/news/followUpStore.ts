@@ -76,7 +76,13 @@ const getSortTime = (item: Pick<FollowUpItem, "createdAt">) => {
 export const getFollowUpPlacement = (item: FollowUpItem): FollowUpPlacement =>
   isFollowUpPlacement(item.placement) ? item.placement : "manual";
 
-const getPlacementRank = (item: FollowUpItem) => (getFollowUpPlacement(item) === "manual" ? 0 : 1);
+const getPriorityRank = (item: FollowUpItem) => {
+  const placement = getFollowUpPlacement(item);
+
+  if (placement === "manual") return item.status === "done" ? 1 : 0;
+
+  return item.status === "done" ? 2 : 3;
+};
 
 const getDisplayOrder = (item: FollowUpItem) => (typeof item.displayOrder === "number" ? item.displayOrder : getSortTime(item));
 
@@ -86,7 +92,7 @@ const sortFollowUpItems = (items: FollowUpItem[]) =>
     .sort(
       (a, b) =>
         a.item.date.localeCompare(b.item.date) ||
-        getPlacementRank(a.item) - getPlacementRank(b.item) ||
+        getPriorityRank(a.item) - getPriorityRank(b.item) ||
         getDisplayOrder(a.item) - getDisplayOrder(b.item) ||
         getSortTime(a.item) - getSortTime(b.item) ||
         a.index - b.index,

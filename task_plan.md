@@ -121,3 +121,19 @@ Guarantee shared-editing pages hydrate from the cloud before rendering editable 
 - Do not render the editor dashboard while shared editing is enabled and the first cloud hydrate has not completed.
 - Do not queue cloud writes before initial hydrate.
 - Require each PUT to include the cloud `updatedAt` version it was based on; reject stale writes with 409.
+
+# Follow-Up Completion/Edit v1 Plan
+
+## Goal
+Let third-column manual follow-up items edit title/link/date from the existing edit modal, and let every row be checked off while staying visible and deduped.
+
+## Phases
+1. Inspect current follow-up status, sorting, row rendering, and edit modal. - complete
+2. Add status-aware follow-up sorting and keep done items visible. - complete
+3. Add per-row checkbox with dimmed strikethrough done state. - complete
+4. Extend manual item edit modal to update title, link, and date. - complete
+5. Build and summarize behavior. - complete
+
+## Decisions
+- Keep done items in `follow_up_items` so `sourceNewsId` dedupe still prevents repeated auto capture.
+- Preserve manual priority over auto items, with done items sorted after active items within each placement group.

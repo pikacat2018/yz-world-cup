@@ -183,6 +183,8 @@ export default function EditorDesk() {
   const [manualLinkDraft, setManualLinkDraft] = useState("");
   const [manualDateDraft, setManualDateDraft] = useState(getLocalDateKey);
   const [itemDateDraft, setItemDateDraft] = useState(getLocalDateKey);
+  const [itemTitleDraft, setItemTitleDraft] = useState("");
+  const [itemLinkDraft, setItemLinkDraft] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
   const [keywordWindowHours, setKeywordWindowHours] = useState<RecentKeywordWindowHours>(12);
   const [refreshStatus, setRefreshStatus] = useState<"idle" | "fetching" | "updated" | "empty" | "failed">("idle");
@@ -226,11 +228,11 @@ export default function EditorDesk() {
     };
   }, [refreshSelection]);
 
-  const selectedItems = useMemo(() => followUps.filter((item) => item.date === selectedDate && item.status === "active"), [followUps, selectedDate]);
+  const selectedItems = useMemo(() => followUps.filter((item) => item.date === selectedDate), [followUps, selectedDate]);
   const visibleRows = useMemo(() => flattenVisibleItems(selectedItems, collapsedIds), [collapsedIds, selectedItems]);
   const exportText = useMemo(() => buildExportText(selectedDate, selectedItems), [selectedDate, selectedItems]);
   const markedDates = useMemo(
-    () => new Set(followUps.filter((item) => item.status === "active").map((item) => item.date)),
+    () => new Set(followUps.map((item) => item.date)),
     [followUps],
   );
   const monthDays = useMemo(() => getMonthDays(selectedDate), [selectedDate]);
@@ -352,6 +354,9 @@ export default function EditorDesk() {
     const dragged = itemsById.get(draggedId);
     const target = itemsById.get(targetId);
     if (!dragged || !target) return;
+    const draggedPlacement = getFollowUpPlacement(dragged);
+    const targetPlacement = getFollowUpPlacement(target);
+    if (draggedPlacement !== targetPlacement && !(draggedPlacement === "auto" && targetPlacement === "manual")) return;
 
     const children = buildChildrenMap(dateItems);
     const draggedSubtreeIds = getSubtreeIds(dragged.id, children);
@@ -362,7 +367,9 @@ export default function EditorDesk() {
     if (targetLevel + 1 + draggedDepth > MAX_NESTING_LEVEL) return;
 
     const now = new Date().toISOString();
-    persistFollowUps(followUps.map((item) => (item.id === dragged.id ? { ...item, parentId: target.id, updatedAt: now } : item)));
+    persistFollowUps(
+      followUps.map((item) => (item.id === dragged.id ? { ...item, parentId: target.id, placement: targetPlacement, updatedAt: now } : item)),
+    );
     setCollapsedIds((current) => {
       const next = new Set(current);
       next.delete(target.id);
@@ -378,7 +385,10 @@ export default function EditorDesk() {
     const dragged = itemsById.get(draggedId);
     const target = itemsById.get(targetId);
     if (!dragged || !target) return;
-    if (getFollowUpPlacement(dragged) !== getFollowUpPlacement(target)) return;
+    const draggedPlacement = getFollowUpPlacement(dragged);
+    const targetPlacement = getFollowUpPlacement(target);
+    if (draggedPlacement !== targetPlacement && !(draggedPlacement === "auto" && targetPlacement === "manual")) return;
+    if (dragged.status !== target.status) return;
 
     const children = buildChildrenMap(dateItems);
     const draggedSubtreeIds = getSubtreeIds(dragged.id, children);
@@ -390,9 +400,8 @@ export default function EditorDesk() {
     if (nextLevel + draggedDepth > MAX_NESTING_LEVEL) return;
 
     const now = new Date().toISOString();
-    const placement = getFollowUpPlacement(target);
     const siblings = dateItems
-      .filter((item) => item.id !== dragged.id && item.parentId === nextParentId && getFollowUpPlacement(item) === placement)
+      .filter((item) => item.id !== dragged.id && item.parentId === nextParentId && getFollowUpPlacement(item) === targetPlacement && item.status === target.status)
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     const targetIndex = siblings.findIndex((item) => item.id === target.id);
     const insertIndex = targetIndex < 0 ? siblings.length : targetIndex + (position === "after" ? 1 : 0);
@@ -406,6 +415,7 @@ export default function EditorDesk() {
           return {
             ...item,
             parentId: nextParentId,
+            placement: targetPlacement,
             displayOrder,
             updatedAt: now,
           };
@@ -508,10 +518,14 @@ export default function EditorDesk() {
   const openDateEdit = (item: FollowUpItem) => {
     setDateEditItem(item);
     setItemDateDraft(item.date);
+    setItemTitleDraft(item.title);
+    setItemLinkDraft(getOriginalLink(item));
   };
 
   const applyItemDateEdit = () => {
     if (!dateEditItem || !itemDateDraft) return;
+    const normalizedTitle = itemTitleDraft.trim();
+    if (dateEditItem.type === "manual" && !normalizedTitle) return;
 
     const children = buildChildrenMap(followUps);
     const moveIds = getSubtreeIds(dateEditItem.id, children);
@@ -521,6 +535,12 @@ export default function EditorDesk() {
         ? {
             ...item,
             date: itemDateDraft,
+            ...(item.id === dateEditItem.id && item.type === "manual"
+              ? {
+                  title: normalizedTitle,
+                  url: itemLinkDraft.trim() || undefined,
+                }
+              : {}),
             updatedAt: now,
           }
         : item,
@@ -531,14 +551,22 @@ export default function EditorDesk() {
     setDateEditItem(null);
   };
 
-  const renderFollowUpRow = ({ childCount, item, level }: FollowUpTreeRow, index: number) => {
+  const toggleFollowUpDone = (target: FollowUpItem) => {
+    const now = new Date().toISOString();
+    const nextStatus = target.status === "done" ? "active" : "done";
+
+    persistFollowUps(followUps.map((item) => (item.id === target.id ? { ...item, status: nextStatus, updatedAt: now } : item)));
+  };
+
+  const renderFollowUpRow = ({ childCount, item, level }: FollowUpTreeRow) => {
     const isParent = childCount > 0;
     const link = getOriginalLink(item);
     const sourceColor = item.source ? sourceColors[item.source] : "var(--theme-accent-display)";
+    const isDone = item.status === "done";
 
     return (
       <li
-        className={`selected-item follow-up-item level-${level} ${isParent ? "parent" : ""} ${draggingId === item.id ? "dragging" : ""} ${
+        className={`selected-item follow-up-item level-${level} ${isParent ? "parent" : ""} ${isDone ? "done" : ""} ${draggingId === item.id ? "dragging" : ""} ${
           dropTarget?.id === item.id ? `drop-${dropTarget.mode}` : ""
         }`}
         data-follow-up-id={item.id}
@@ -575,7 +603,10 @@ export default function EditorDesk() {
         }}
         style={{ "--follow-up-level": level } as CSSProperties}
       >
-        <span className="selected-index">{String(index + 1).padStart(2, "0")}</span>
+        <label className="follow-up-check" title={isDone ? "标记为未完成" : "标记为已完成"}>
+          <input checked={isDone} onChange={() => toggleFollowUpDone(item)} type="checkbox" />
+          <span aria-hidden="true" />
+        </label>
         <span
           aria-label={item.source ?? "manual"}
           className="selected-source-block"
@@ -909,7 +940,7 @@ export default function EditorDesk() {
           >
             <div className="selected-export-head">
               <div>
-                <h3>调整显示日期</h3>
+                <h3>{dateEditItem.type === "manual" ? "编辑跟进事项" : "调整显示日期"}</h3>
                 <span>{dateEditItem.title}</span>
               </div>
               <div className="selected-export-actions">
@@ -919,6 +950,28 @@ export default function EditorDesk() {
               </div>
             </div>
             <div className="follow-up-add-fields">
+              {dateEditItem.type === "manual" && (
+                <>
+                  <label>
+                    <span>事项名</span>
+                    <input
+                      autoFocus
+                      onChange={(event) => setItemTitleDraft(event.target.value)}
+                      placeholder="例如：阿森纳夺冠后续"
+                      value={itemTitleDraft}
+                    />
+                  </label>
+                  <label>
+                    <span>链接</span>
+                    <input
+                      onChange={(event) => setItemLinkDraft(event.target.value)}
+                      placeholder="https://..."
+                      type="url"
+                      value={itemLinkDraft}
+                    />
+                  </label>
+                </>
+              )}
               <label>
                 <span>日期</span>
                 <input onChange={(event) => setItemDateDraft(event.target.value)} type="date" value={itemDateDraft} />
@@ -928,7 +981,7 @@ export default function EditorDesk() {
               <button onClick={() => setDateEditItem(null)} type="button">
                 取消
               </button>
-              <button disabled={!itemDateDraft} type="submit">
+              <button disabled={!itemDateDraft || (dateEditItem.type === "manual" && !itemTitleDraft.trim())} type="submit">
                 保存
               </button>
             </div>

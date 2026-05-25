@@ -7,9 +7,13 @@ import {
   MAX_PINNED_NEWS,
   mergeNewsItems,
   NEWS_FEED_CONFIG,
+  readReadNewsIds,
+  readUnreadNewsIds,
   readStoredNewsItems,
   saveNewsItems,
   savePinnedNewsIds,
+  saveReadNewsIds,
+  saveUnreadNewsIds,
 } from "../news/newsStore";
 import { RECENT_KEYWORD_SEARCH_EVENT, type RecentKeywordSearchDetail } from "../news/recentKeywords";
 import { sourceColors } from "../news/sourceColors";
@@ -335,6 +339,21 @@ export default function MessagePanel() {
 
     return Date.now() - fetchedTime <= 24 * 60 * 60 * 1000;
   };
+  const unreadNewIds = items.filter(isUnreadNew).map((item) => item.id);
+  const handleClearNewMarks = () => {
+    if (unreadNewIds.length === 0) return;
+
+    const unreadNewSet = new Set(unreadNewIds);
+    const nextItems = items.map((item) => (unreadNewSet.has(item.id) ? { ...item, isRead: true, isNew: false } : item));
+    const nextReadIds = [...readReadNewsIds(), ...unreadNewIds];
+    const nextUnreadIds = readUnreadNewsIds().filter((id) => !unreadNewSet.has(id));
+
+    saveReadNewsIds(nextReadIds);
+    saveUnreadNewsIds(nextUnreadIds);
+    saveNewsItems(nextItems);
+    notifyBottomTickerUpdated();
+    setItems(nextItems);
+  };
 
   const formatTime = (date: Date | null) => {
     if (!date) return "--:--:--";
@@ -378,6 +397,16 @@ export default function MessagePanel() {
           <span className={`news-sync-status ${fetchStatus === "failed" ? "failed" : ""}`}>{fetchStatusText}</span>
           <button aria-label={fetchButtonText} disabled={isFetchButtonDisabled} onClick={handleManualFetch} title={fetchButtonText} type="button">
             <RefreshIcon />
+          </button>
+          <button
+            aria-label={`清除 ${unreadNewIds.length} 条新消息标记`}
+            className="news-clear-new-button"
+            disabled={unreadNewIds.length === 0}
+            onClick={handleClearNewMarks}
+            title={unreadNewIds.length > 0 ? `清除 ${unreadNewIds.length} 条新消息标记` : "暂无新消息标记"}
+            type="button"
+          >
+            新
           </button>
           <span className="news-sync-time">上次更新 {formatTime(lastUpdatedAt)}</span>
         </div>
