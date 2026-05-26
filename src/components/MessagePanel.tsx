@@ -9,10 +9,12 @@ import {
   readReadNewsIds,
   readUnreadNewsIds,
   readStoredNewsItems,
+  removePinnedNewsDate,
   saveNewsItems,
   savePinnedNewsIds,
   saveReadNewsIds,
   saveUnreadNewsIds,
+  setPinnedNewsDate,
 } from "../news/newsStore";
 import { RECENT_KEYWORD_SEARCH_EVENT, type RecentKeywordSearchDetail } from "../news/recentKeywords";
 import { sourceColors } from "../news/sourceColors";
@@ -297,18 +299,23 @@ export default function MessagePanel() {
   const togglePinned = (target: NewsItem) => {
     setNotice("");
 
+    const isPinning = !target.pinned;
     const nextItems = items.map((item) =>
       item.id === target.id
         ? {
             ...item,
-            pinned: !item.pinned,
+            pinned: isPinning,
             sourcePinned: item.pinned ? false : item.sourcePinned,
           }
         : item,
     );
     const nextPinnedIds = nextItems.filter((item) => item.pinned).map((item) => item.id);
 
-    if (target.pinned) markRedditHotSeen(target);
+    if (isPinning) setPinnedNewsDate(target.id);
+    else {
+      markRedditHotSeen(target);
+      removePinnedNewsDate(target.id);
+    }
     savePinnedNewsIds(nextPinnedIds);
     saveNewsItems(nextItems);
     notifyBottomTickerUpdated();

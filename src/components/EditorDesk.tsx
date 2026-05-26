@@ -17,8 +17,10 @@ import {
   fetchLatestRedditHotNews,
   markRedditHotSeen,
   mergeManualRedditHotItems,
+  readPinnedNewsDates,
   readStoredNewsItems,
   saveNewsItems,
+  savePinnedNewsDates,
   savePinnedNewsIds,
 } from "../news/newsStore";
 import {
@@ -201,7 +203,7 @@ export default function EditorDesk() {
 
   const refreshSelection = useCallback(() => {
     const nextNewsItems = readStoredNewsItems();
-    const merged = mergePinnedNewsIntoFollowUps(readFollowUpItems(), nextNewsItems, selectedDate);
+    const merged = mergePinnedNewsIntoFollowUps(readFollowUpItems(), nextNewsItems, selectedDate, readPinnedNewsDates());
 
     if (merged.addedCount > 0) {
       saveFollowUpItems(merged.items);
@@ -263,7 +265,12 @@ export default function EditorDesk() {
       const currentNewsItems = readStoredNewsItems();
       const incoming = await fetchLatestRedditHotNews();
       const mergedNews = mergeManualRedditHotItems(currentNewsItems, incoming);
-      const mergedFollowUps = mergePinnedNewsIntoFollowUps(readFollowUpItems(), mergedNews.items, selectedDate);
+      const nextPinnedNewsDates = { ...readPinnedNewsDates() };
+
+      for (const item of incoming) nextPinnedNewsDates[item.id] = selectedDate;
+      savePinnedNewsDates(nextPinnedNewsDates);
+
+      const mergedFollowUps = mergePinnedNewsIntoFollowUps(readFollowUpItems(), mergedNews.items, selectedDate, nextPinnedNewsDates);
 
       if (mergedFollowUps.addedCount > 0) saveFollowUpItems(mergedFollowUps.items);
       setNewsItems(mergedNews.items);

@@ -180,6 +180,7 @@ export function mergePinnedNewsIntoFollowUps(
   followUps: FollowUpItem[],
   newsItems: NewsItem[],
   targetDate: string,
+  pinnedNewsDates: Record<string, string> = {},
 ): {
   items: FollowUpItem[];
   addedCount: number;
@@ -187,7 +188,9 @@ export function mergePinnedNewsIntoFollowUps(
   const existingNewsDateKeys = new Set(
     followUps.filter((item) => item.sourceNewsId).map((item) => `${item.date}:${item.sourceNewsId}`),
   );
-  const incoming = newsItems.filter((item) => item.pinned && !existingNewsDateKeys.has(`${targetDate}:${item.id}`));
+  const incoming = newsItems.filter(
+    (item) => item.pinned && pinnedNewsDates[item.id] === targetDate && !existingNewsDateKeys.has(`${targetDate}:${item.id}`),
+  );
   const nextIncoming: FollowUpItem[] = [];
 
   for (const item of incoming) {

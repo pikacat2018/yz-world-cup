@@ -7,6 +7,7 @@ type Env = {
 const allowedKeys = new Set([
   "news_items",
   "pinned_news_ids",
+  "pinned_news_dates",
   "read_news_ids",
   "unread_news_ids",
   "reddit_hot_seen_keys",

@@ -5,6 +5,7 @@ import { isApplyingSharedState, queueSharedStateSave } from "../shared/onlineSta
 import type { NewsFeedState, NewsItem } from "./types";
 
 export const PINNED_NEWS_STORAGE_KEY = "yz-world-cup-pinned-news";
+export const PINNED_NEWS_DATES_STORAGE_KEY = "yz-world-cup-pinned-news-dates-v1";
 export const READ_NEWS_STORAGE_KEY = "yz-world-cup-read-news";
 export const UNREAD_NEWS_STORAGE_KEY = "yz-world-cup-unread-news";
 export const NEWS_ITEMS_STORAGE_KEY = "yz-world-cup-news-items-v7";
@@ -24,6 +25,13 @@ const SOURCE_FETCH_TIMEOUT_MS = {
   x: 4_000,
   reddit: 15_000,
 };
+const PINNED_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const pad = (value: number) => String(value).padStart(2, "0");
+
+export function getLocalNewsDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
 
 const parseSortTime = (value?: string) => {
   if (!value) return 0;
@@ -216,6 +224,47 @@ export function savePinnedNewsIds(ids: string[]) {
   if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_ids", nextIds);
 }
 
+export function readPinnedNewsDates(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(PINNED_NEWS_DATES_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === "string" && typeof entry[1] === "string" && PINNED_DATE_KEY_PATTERN.test(entry[1]),
+      ),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function savePinnedNewsDates(dates: Record<string, string>) {
+  const nextDates = Object.fromEntries(
+    Object.entries(dates).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === "string" && typeof entry[1] === "string" && PINNED_DATE_KEY_PATTERN.test(entry[1]),
+    ),
+  );
+
+  window.localStorage.setItem(PINNED_NEWS_DATES_STORAGE_KEY, JSON.stringify(nextDates));
+  if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_dates", nextDates);
+}
+
+export function setPinnedNewsDate(id: string, date = getLocalNewsDateKey()) {
+  savePinnedNewsDates({ ...readPinnedNewsDates(), [id]: date });
+}
+
+export function removePinnedNewsDate(id: string) {
+  const nextDates = readPinnedNewsDates();
+
+  delete nextDates[id];
+  savePinnedNewsDates(nextDates);
+}
+
 export function readReadNewsIds(): string[] {
   return readIdList(READ_NEWS_STORAGE_KEY);
 }
@@ -255,6 +304,7 @@ export function markRedditHotSeen(item: NewsItem) {
 
   saveRedditHotSeenKeys([...readRedditHotSeenKeys(), key]);
   savePinnedNewsIds(readPinnedNewsIds().filter((id) => id !== item.id));
+  removePinnedNewsDate(item.id);
 }
 
 export function readStoredNewsItems(): NewsItem[] {
@@ -431,6 +481,8 @@ export function mergeNewsItems(
   const unreadIds = readUnreadNewsIds();
   const redditHotSeenKeys = new Set(readRedditHotSeenKeys());
   const nextRedditHotSeenKeys = new Set(redditHotSeenKeys);
+  const nextPinnedNewsDates = { ...readPinnedNewsDates() };
+  const currentDate = getLocalNewsDateKey();
   const newUnreadIds = incoming
     .filter((item) => !existingKeys.has(getDedupeKey(item)) && !readSet.has(item.id))
     .map((item) => item.id);
@@ -444,6 +496,7 @@ export function mergeNewsItems(
     if (autoPinnedItem.pinned && autoPinnedItem.sourcePinned) {
       const seenKey = getRedditHotSeenKey(autoPinnedItem);
       if (seenKey) nextRedditHotSeenKeys.add(seenKey);
+      nextPinnedNewsDates[autoPinnedItem.id] = nextPinnedNewsDates[autoPinnedItem.id] ?? currentDate;
     }
 
     return {
@@ -481,6 +534,9 @@ export function mergeNewsItems(
 
   saveRedditHotSeenKeys([...nextRedditHotSeenKeys]);
   savePinnedNewsIds(items.filter((item) => item.pinned).map((item) => item.id));
+  savePinnedNewsDates(
+    Object.fromEntries(Object.entries(nextPinnedNewsDates).filter(([id]) => items.some((item) => item.id === id && item.pinned))),
+  );
   saveNewsItems(items);
 
   return { addedCount: newUnreadIds.length, items };
@@ -529,12 +585,15 @@ export async function loadNewsItems(): Promise<NewsItem[]> {
   const latest = await fetchLatestNews(existingItems);
   const redditHotSeenKeys = new Set(readRedditHotSeenKeys());
   const nextRedditHotSeenKeys = new Set(redditHotSeenKeys);
+  const nextPinnedNewsDates = { ...readPinnedNewsDates() };
+  const currentDate = getLocalNewsDateKey();
   const latestAsHistory = latest.map((item) => {
     const autoPinnedItem = getAutoPinnedNewsItem(item, undefined, redditHotSeenKeys);
 
     if (autoPinnedItem.pinned && autoPinnedItem.sourcePinned) {
       const seenKey = getRedditHotSeenKey(autoPinnedItem);
       if (seenKey) nextRedditHotSeenKeys.add(seenKey);
+      nextPinnedNewsDates[autoPinnedItem.id] = nextPinnedNewsDates[autoPinnedItem.id] ?? currentDate;
     }
 
     return { ...autoPinnedItem, isNew: false };
@@ -546,6 +605,7 @@ export async function loadNewsItems(): Promise<NewsItem[]> {
 
   saveRedditHotSeenKeys([...nextRedditHotSeenKeys]);
   savePinnedNewsIds(pinnedIds);
+  savePinnedNewsDates(nextPinnedNewsDates);
   const items = limitNewsItems(applyStoredNewsState(dedupeNewsItems([...existingItems, ...latestAsHistory])));
   saveNewsItems(items);
   return items;

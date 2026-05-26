@@ -1,6 +1,7 @@
 export type SharedStateKey =
   | "news_items"
   | "pinned_news_ids"
+  | "pinned_news_dates"
   | "read_news_ids"
   | "unread_news_ids"
   | "reddit_hot_seen_keys"
@@ -37,6 +38,7 @@ const PUSH_DEBOUNCE_MS = 250;
 const localStorageKeys: Record<SharedStateKey, string> = {
   news_items: "yz-world-cup-news-items-v7",
   pinned_news_ids: "yz-world-cup-pinned-news",
+  pinned_news_dates: "yz-world-cup-pinned-news-dates-v1",
   read_news_ids: "yz-world-cup-read-news",
   unread_news_ids: "yz-world-cup-unread-news",
   reddit_hot_seen_keys: "yz-world-cup-reddit-hot-seen-v1",
