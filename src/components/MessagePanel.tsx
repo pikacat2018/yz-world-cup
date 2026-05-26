@@ -4,7 +4,6 @@ import {
   loadNewsFeed,
   markRedditHotSeen,
   markNewsIdRead,
-  MAX_PINNED_NEWS,
   mergeNewsItems,
   NEWS_FEED_CONFIG,
   readReadNewsIds,
@@ -34,10 +33,7 @@ const getSearchText = (item: NewsItem) =>
     .filter(Boolean)
     .join(" ");
 
-const splitNews = (items: NewsItem[]) => ({
-  normal: items.filter((item) => !item.feedSection || item.feedSection === "latest"),
-  pinned: items.filter((item) => item.pinned).slice(0, MAX_PINNED_NEWS),
-});
+const getNormalNews = (items: NewsItem[]) => items.filter((item) => !item.feedSection || item.feedSection === "latest");
 
 const formatNewsTime = (item: NewsItem) => {
   const date = new Date(item.publishedAt || item.fetchedAt);
@@ -249,7 +245,7 @@ export default function MessagePanel() {
     return () => window.clearInterval(intervalId);
   }, [cooldownUntil]);
 
-  const { normal, pinned } = useMemo(() => splitNews(items), [items]);
+  const normal = useMemo(() => getNormalNews(items), [items]);
   const normalizedSearchQuery = normalizeSearchText(searchQuery);
   const isSearching = normalizedSearchQuery.length > 0;
   const normalizedExternalSearchTerms = useMemo(
@@ -300,11 +296,6 @@ export default function MessagePanel() {
 
   const togglePinned = (target: NewsItem) => {
     setNotice("");
-
-    if (!target.pinned && pinned.length >= MAX_PINNED_NEWS) {
-      setNotice(`精选最多 ${MAX_PINNED_NEWS} 条，请先取消一条。`);
-      return;
-    }
 
     const nextItems = items.map((item) =>
       item.id === target.id

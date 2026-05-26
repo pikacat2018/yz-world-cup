@@ -13,14 +13,12 @@ export const NEWS_FEED_CONFIG = {
   initialVisibleCount: 40,
   loadMoreCount: 20,
   maxStoredItems: 10_000,
-  pinnedLimit: 120,
 };
 export const SOURCE_REFRESH_CONFIG = {
   zhibo8: 90_000,
   redditNew: 120_000,
   redditHot: 600_000,
 };
-export const MAX_PINNED_NEWS = NEWS_FEED_CONFIG.pinnedLimit;
 const SOURCE_FETCH_TIMEOUT_MS = {
   zhibo8: 30_000,
   x: 4_000,
@@ -208,13 +206,13 @@ const saveIdList = (key: string, ids: string[], limit?: number) => {
 };
 
 export function readPinnedNewsIds(): string[] {
-  return readIdList(PINNED_NEWS_STORAGE_KEY, MAX_PINNED_NEWS);
+  return readIdList(PINNED_NEWS_STORAGE_KEY);
 }
 
 export function savePinnedNewsIds(ids: string[]) {
-  const nextIds = Array.from(new Set(ids)).slice(0, MAX_PINNED_NEWS);
+  const nextIds = Array.from(new Set(ids));
 
-  saveIdList(PINNED_NEWS_STORAGE_KEY, nextIds, MAX_PINNED_NEWS);
+  saveIdList(PINNED_NEWS_STORAGE_KEY, nextIds);
   if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_ids", nextIds);
 }
 

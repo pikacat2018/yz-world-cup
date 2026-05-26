@@ -141,7 +141,7 @@ export function createFollowUpFromNews(newsItem: NewsItem, date: string, display
   const placement: FollowUpPlacement = newsItem.sourcePinned ? "auto" : "manual";
 
   return {
-    id: `follow-news-${newsItem.id}`,
+    id: `follow-news-${date}-${newsItem.id}`,
     date,
     title: newsItem.translatedTitle || newsItem.title,
     sourceNewsId: newsItem.id,
@@ -184,8 +184,10 @@ export function mergePinnedNewsIntoFollowUps(
   items: FollowUpItem[];
   addedCount: number;
 } {
-  const existingNewsIds = new Set(followUps.map((item) => item.sourceNewsId).filter(Boolean));
-  const incoming = newsItems.filter((item) => item.pinned && !existingNewsIds.has(item.id));
+  const existingNewsDateKeys = new Set(
+    followUps.filter((item) => item.sourceNewsId).map((item) => `${item.date}:${item.sourceNewsId}`),
+  );
+  const incoming = newsItems.filter((item) => item.pinned && !existingNewsDateKeys.has(`${targetDate}:${item.id}`));
   const nextIncoming: FollowUpItem[] = [];
 
   for (const item of incoming) {
