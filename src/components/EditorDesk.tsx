@@ -395,7 +395,10 @@ export default function EditorDesk() {
     const draggedPlacement = getFollowUpPlacement(dragged);
     const targetPlacement = getFollowUpPlacement(target);
     if (draggedPlacement !== targetPlacement && !(draggedPlacement === "auto" && targetPlacement === "manual")) return;
-    if (dragged.status !== target.status) return;
+    const shouldPromoteAutoItem =
+      draggedPlacement === "auto" && dragged.status === "active" && target.status === "done" && position === "before";
+    if (dragged.status !== target.status && !shouldPromoteAutoItem) return;
+    const nextPlacement = shouldPromoteAutoItem ? "manual" : targetPlacement;
 
     const children = buildChildrenMap(dateItems);
     const draggedSubtreeIds = getSubtreeIds(dragged.id, children);
@@ -408,9 +411,9 @@ export default function EditorDesk() {
 
     const now = new Date().toISOString();
     const siblings = dateItems
-      .filter((item) => item.id !== dragged.id && item.parentId === nextParentId && getFollowUpPlacement(item) === targetPlacement && item.status === target.status)
+      .filter((item) => item.id !== dragged.id && item.parentId === nextParentId && getFollowUpPlacement(item) === nextPlacement && item.status === dragged.status)
       .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    const targetIndex = siblings.findIndex((item) => item.id === target.id);
+    const targetIndex = shouldPromoteAutoItem ? siblings.length : siblings.findIndex((item) => item.id === target.id);
     const insertIndex = targetIndex < 0 ? siblings.length : targetIndex + (position === "after" ? 1 : 0);
     const reorderedSiblings = [...siblings.slice(0, insertIndex), { ...dragged, parentId: nextParentId }, ...siblings.slice(insertIndex)];
     const orderById = new Map(reorderedSiblings.map((item, index) => [item.id, (index + 1) * 1000]));
@@ -422,7 +425,7 @@ export default function EditorDesk() {
           return {
             ...item,
             parentId: nextParentId,
-            placement: targetPlacement,
+            placement: nextPlacement,
             displayOrder,
             updatedAt: now,
           };
