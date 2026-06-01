@@ -1,5 +1,6 @@
 import { type CSSProperties, type UIEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchLatestRedditHotNews,
   fetchLatestNews,
   loadNewsFeed,
   markRedditHotSeen,
@@ -187,7 +188,9 @@ export default function MessagePanel() {
       }
 
       setLastUpdatedAt(new Date());
-      const incoming = await fetchLatestNews();
+      const results = await Promise.allSettled([fetchLatestNews(), fetchLatestRedditHotNews()]);
+      const incoming = results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+      if (incoming.length === 0) throw new Error("news sync returned no items");
       setItems((current) => {
         const merged = mergeNewsItems(current, incoming);
         setLastAddedCount(merged.addedCount);

@@ -137,3 +137,20 @@ Let third-column manual follow-up items edit title/link/date from the existing e
 ## Decisions
 - Keep done items in `follow_up_items` so `sourceNewsId` dedupe still prevents repeated auto capture.
 - Preserve manual priority over auto items, with done items sorted after active items within each placement group.
+
+# Reddit Hot Auto Follow-Up v1 Plan
+
+## Goal
+Make long-running pages keep the third-column Reddit hot follow-ups fresh by using a hot-only sync path in addition to the general fourth-column news sync.
+
+## Phases
+1. Inspect current fourth-column auto sync, Reddit collector, hot/new dedupe, and third-column pinned merge. - complete
+2. Add hot-only Reddit fetch results into non-initial news sync so current hot posts are auto-pinned and merged into the third column. - complete
+3. Preserve `hot` source variants when collector results contain the same post from both hot and new listings. - complete
+4. Align Reddit fallback fetch limits with the 30-post requirement. - complete
+5. Build and summarize modified files. - complete
+
+## Decisions
+- Keep the third column as a receiver of pinned/source-pinned news rather than adding a second timer there.
+- Let the fourth-column auto/manual sync tolerate one Reddit path failing as long as another news path returns items.
+- Preserve `hot,new` on duplicate Reddit posts so hot-list items remain eligible for automatic third-column capture.

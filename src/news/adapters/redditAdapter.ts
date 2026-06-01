@@ -1,7 +1,7 @@
 import type { NewsItem, RedditSourceVariant } from "../types";
 
-const REDDIT_SOCCER_HOT_JSON_URL = "https://www.reddit.com/r/soccer/hot.json?limit=25";
-const REDDIT_SOCCER_NEW_JSON_URL = "https://www.reddit.com/r/soccer/new.json?limit=25";
+const REDDIT_SOCCER_HOT_JSON_URL = "https://www.reddit.com/r/soccer/hot.json?limit=30";
+const REDDIT_SOCCER_NEW_JSON_URL = "https://www.reddit.com/r/soccer/new.json?limit=30";
 const LOCAL_REDDIT_HOT_JSON_URL = "/api/reddit/hot";
 const LOCAL_REDDIT_NEW_JSON_URL = "/api/reddit/new";
 const LOCAL_REDDIT_COLLECT_URL = "/api/reddit/collect";
@@ -9,7 +9,7 @@ const OLD_REDDIT_SOCCER_HOT_URL = "https://old.reddit.com/r/soccer/";
 const OLD_REDDIT_SOCCER_NEW_URL = "https://old.reddit.com/r/soccer/new/";
 const REDDIT_BASE_URL = "https://www.reddit.com";
 const OLD_REDDIT_BASE_URL = "https://old.reddit.com";
-const REDDIT_FETCH_LIMIT = 20;
+const REDDIT_FETCH_LIMIT = 30;
 const REDDIT_NEW_EXISTING_BUFFER_COUNT = 3;
 
 type RedditListingVariant = "hot" | "new";

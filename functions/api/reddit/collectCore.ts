@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 export type RedditVariant = "hot" | "new";
+export type RedditSourceVariant = RedditVariant | "hot,new";
 
 type RedditPost = {
   created_utc?: number;
@@ -33,7 +34,7 @@ export type RedditNewsItem = {
   rawCategory: string;
   score: number;
   source: "reddit";
-  sourceVariant: RedditVariant;
+  sourceVariant: RedditSourceVariant;
   title: string;
   url: string;
 };
@@ -102,6 +103,24 @@ const redditAtomUrls = (subreddit: string, variant: RedditVariant) =>
   variant === "new"
     ? [`https://www.reddit.com/r/${subreddit}/new/.rss`, `https://old.reddit.com/r/${subreddit}/new/.rss`]
     : [`https://www.reddit.com/r/${subreddit}/.rss`, `https://old.reddit.com/r/${subreddit}/.rss`];
+
+const mergeRedditVariant = (a: RedditSourceVariant, b: RedditSourceVariant): RedditSourceVariant => {
+  const variants = new Set([...a.split(","), ...b.split(",")]);
+  return variants.has("hot") && variants.has("new") ? "hot,new" : variants.has("hot") ? "hot" : "new";
+};
+
+const mergeRedditItem = (existing: RedditNewsItem, incoming: RedditNewsItem): RedditNewsItem => ({
+  ...existing,
+  comments: Math.max(existing.comments, incoming.comments),
+  externalUrl: existing.externalUrl || incoming.externalUrl,
+  fetchedAt: incoming.fetchedAt > existing.fetchedAt ? incoming.fetchedAt : existing.fetchedAt,
+  priority: Math.max(existing.priority, incoming.priority),
+  rawCategory: existing.rawCategory || incoming.rawCategory,
+  score: Math.max(existing.score, incoming.score),
+  sourceVariant: mergeRedditVariant(existing.sourceVariant, incoming.sourceVariant),
+  title: existing.title || incoming.title,
+  url: existing.url || incoming.url,
+});
 
 const atomHeaders = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) football-monitor/0.1",
@@ -271,12 +290,12 @@ export async function collectRedditForApi(
   const atomResults =
     jsonItems.length > 0 ? [] : await Promise.allSettled(variants.map((variant) => fetchRedditAtomListing(subreddit, variant, fetchText)));
   const items = jsonItems.length > 0 ? jsonItems : atomResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
-  const seenIds = new Set<string>();
-  const merged = items.filter((item) => {
-    if (seenIds.has(item.id)) return false;
-    seenIds.add(item.id);
-    return true;
-  });
+  const byId = new Map<string, RedditNewsItem>();
+  for (const item of items) {
+    const existing = byId.get(item.id);
+    byId.set(item.id, existing ? mergeRedditItem(existing, item) : item);
+  }
+  const merged = [...byId.values()];
 
   if (merged.length === 0) {
     const rejectedJson = jsonResults.find((result) => result.status === "rejected");

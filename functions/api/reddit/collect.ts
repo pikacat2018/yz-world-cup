@@ -13,7 +13,7 @@ export const onRequestGet: PagesFunction = async ({ request }) => {
   const url = new URL(request.url);
   const subreddit = url.searchParams.get("subreddit") || "soccer";
   const requestedVariant = url.searchParams.get("variant");
-  const variants: RedditVariant[] = requestedVariant === "hot" || requestedVariant === "new" ? [requestedVariant] : ["new", "hot"];
+  const variants: RedditVariant[] = requestedVariant === "hot" || requestedVariant === "new" ? [requestedVariant] : ["hot", "new"];
 
   try {
     return json(await collectRedditForApi(subreddit, variants));

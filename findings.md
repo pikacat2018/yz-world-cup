@@ -33,3 +33,9 @@
 - Third-column items are stored as `FollowUpItem`s in `followUpStore.ts`; pinned news migrates through `mergePinnedNewsIntoFollowUps`.
 - Auto Reddit hot items are represented as pinned news with `sourcePinned: true`; manually starred news keeps `sourcePinned` false/undefined.
 - Existing third-column drag-and-drop only changes hierarchy by dropping a row onto another row; storage sorting currently ignores manual row position and sorts by date plus creation time.
+
+# Reddit Hot Auto Follow-Up v1 Findings
+
+- Fourth-column `MessagePanel` owns the only news auto-sync timer; the third column listens for pinned news changes and merges matching-date items via `mergePinnedNewsIntoFollowUps`.
+- The general Reddit collector previously requested `new` before `hot`, and backend id-level dedupe kept the first duplicate item, so posts present in both lists could lose their `hot` variant before auto-pin eligibility was checked.
+- Frontend fallback constants still used `limit=25` and `REDDIT_FETCH_LIMIT = 20`, so fallback paths did not match the requested top-30 hot capture behavior.

@@ -178,3 +178,8 @@
 - Added row checkboxes that toggle `status` without removing the item, preserving `sourceNewsId` dedupe so completed auto-captured items are not fetched into the third column again.
 - Extended the existing date edit modal for manual items to edit title, link, and date together.
 - `npm run build` passed after the third-column completion checkbox and manual edit changes.
+- Started Reddit Hot Auto Follow-Up v1 after confirming long-running pages were not reliably adding current Reddit hot posts to the third column.
+- Added hot-only Reddit results to fourth-column non-initial sync so auto/manual sync can auto-pin current hot posts even when the general new+hot collector loses hot identity.
+- Updated the Cloudflare Reddit collector to request hot before new and merge duplicate ids into `hot,new` rather than dropping the later variant.
+- Aligned frontend Reddit fallback JSON and parse limits to 30.
+- `npm run build` passed after the Reddit hot auto-follow-up changes.
