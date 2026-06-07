@@ -36,6 +36,7 @@ import type { NewsItem } from "../news/types";
 const MAX_NESTING_LEVEL = 2;
 
 const getOriginalLink = (item: FollowUpItem) => item.url || item.externalUrl || "";
+const canEditFollowUpTitle = (item: FollowUpItem) => item.type === "manual" || (item.source === "reddit" && item.sourceVariant?.includes("hot"));
 
 type FollowUpTreeRow = {
   item: FollowUpItem;
@@ -535,7 +536,8 @@ export default function EditorDesk() {
   const applyItemDateEdit = () => {
     if (!dateEditItem || !itemDateDraft) return;
     const normalizedTitle = itemTitleDraft.trim();
-    if (dateEditItem.type === "manual" && !normalizedTitle) return;
+    const canEditTitle = canEditFollowUpTitle(dateEditItem);
+    if (canEditTitle && !normalizedTitle) return;
 
     const children = buildChildrenMap(followUps);
     const moveIds = getSubtreeIds(dateEditItem.id, children);
@@ -545,10 +547,10 @@ export default function EditorDesk() {
         ? {
             ...item,
             date: itemDateDraft,
-            ...(item.id === dateEditItem.id && item.type === "manual"
+            ...(item.id === dateEditItem.id && canEditTitle
               ? {
                   title: normalizedTitle,
-                  url: itemLinkDraft.trim() || undefined,
+                  ...(item.type === "manual" ? { url: itemLinkDraft.trim() || undefined } : {}),
                 }
               : {}),
             updatedAt: now,
@@ -950,7 +952,7 @@ export default function EditorDesk() {
           >
             <div className="selected-export-head">
               <div>
-                <h3>{dateEditItem.type === "manual" ? "编辑跟进事项" : "调整显示日期"}</h3>
+                <h3>{canEditFollowUpTitle(dateEditItem) ? "编辑跟进事项" : "调整显示日期"}</h3>
                 <span>{dateEditItem.title}</span>
               </div>
               <div className="selected-export-actions">
@@ -960,10 +962,10 @@ export default function EditorDesk() {
               </div>
             </div>
             <div className="follow-up-add-fields">
-              {dateEditItem.type === "manual" && (
+              {canEditFollowUpTitle(dateEditItem) && (
                 <>
                   <label>
-                    <span>事项名</span>
+                    <span>标题</span>
                     <input
                       autoFocus
                       onChange={(event) => setItemTitleDraft(event.target.value)}
@@ -971,15 +973,17 @@ export default function EditorDesk() {
                       value={itemTitleDraft}
                     />
                   </label>
-                  <label>
-                    <span>链接</span>
-                    <input
-                      onChange={(event) => setItemLinkDraft(event.target.value)}
-                      placeholder="https://..."
-                      type="url"
-                      value={itemLinkDraft}
-                    />
-                  </label>
+                  {dateEditItem.type === "manual" && (
+                    <label>
+                      <span>链接</span>
+                      <input
+                        onChange={(event) => setItemLinkDraft(event.target.value)}
+                        placeholder="https://..."
+                        type="url"
+                        value={itemLinkDraft}
+                      />
+                    </label>
+                  )}
                 </>
               )}
               <label>
@@ -991,7 +995,7 @@ export default function EditorDesk() {
               <button onClick={() => setDateEditItem(null)} type="button">
                 取消
               </button>
-              <button disabled={!itemDateDraft || (dateEditItem.type === "manual" && !itemTitleDraft.trim())} type="submit">
+              <button disabled={!itemDateDraft || (canEditFollowUpTitle(dateEditItem) && !itemTitleDraft.trim())} type="submit">
                 保存
               </button>
             </div>
