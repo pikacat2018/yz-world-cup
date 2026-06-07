@@ -65,11 +65,18 @@ const buildTopTickerItems = (): TopTickerItem[] => {
 };
 
 type TopTickerPlaceholderProps = {
+  isColumnSettingsOpen: boolean;
+  onToggleColumnSettings: () => void;
   onThemeChange: (theme: AppTheme) => void;
   theme: AppTheme;
 };
 
-export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTickerPlaceholderProps) {
+export default function TopTickerPlaceholder({
+  isColumnSettingsOpen,
+  onToggleColumnSettings,
+  onThemeChange,
+  theme,
+}: TopTickerPlaceholderProps) {
   const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(buildTopTickerItems);
   const tickerContentRef = useRef<HTMLDivElement>(null);
   const [animationDuration, setAnimationDuration] = useState(TOP_TICKER_FALLBACK_DURATION);
@@ -123,7 +130,19 @@ export default function TopTickerPlaceholder({ onThemeChange, theme }: TopTicker
           <TopTickerContent isDuplicate items={tickerItems} />
         </div>
       </div>
-      <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
+      <div className="top-bar-controls">
+        <button
+          aria-expanded={isColumnSettingsOpen}
+          aria-label={isColumnSettingsOpen ? "收起栏目顺序" : "打开栏目顺序"}
+          className="desktop-column-layout-toggle top-bar-layout-toggle"
+          onClick={onToggleColumnSettings}
+          title={isColumnSettingsOpen ? "收起栏目顺序" : "栏目顺序"}
+          type="button"
+        >
+          <span>序</span>
+        </button>
+        <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
+      </div>
     </header>
   );
 }

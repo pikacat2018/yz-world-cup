@@ -22,8 +22,15 @@ function PassiveWorkspaceNotice({ onRetry, status }: { onRetry: () => void; stat
   );
 }
 
+function getInitialSelectedGroupId() {
+  if (typeof window === "undefined") return "A";
+
+  const groupId = new URLSearchParams(window.location.search).get("group");
+  return groupId && groups.some((group) => group.id === groupId) ? groupId : "A";
+}
+
 function EditorWorkspace({ onThemeChange, theme }: { onThemeChange: (theme: AppTheme) => void; theme: AppTheme }) {
-  const [selectedGroupId, setSelectedGroupId] = useState("A");
+  const [selectedGroupId, setSelectedGroupId] = useState(getInitialSelectedGroupId);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {

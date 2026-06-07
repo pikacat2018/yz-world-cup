@@ -3,19 +3,20 @@ import TeamName from "./TeamName";
 
 type StandingsTableProps = {
   standings: Standing[];
+  variant?: "default" | "compact";
 };
 
-const getStatusClass = (status: Standing["status"]) => {
-  if (status === "qualified") return "qualified";
-  if (status === "eliminated") return "eliminated";
-  if (status === "fighting" || status === "possible") return "contending";
-  return "pending";
+const getRowToneClass = (index: number) => {
+  if (index < 2) return "qualified";
+  return "neutral";
 };
 
-export default function StandingsTable({ standings }: StandingsTableProps) {
+export default function StandingsTable({ standings, variant = "default" }: StandingsTableProps) {
+  const variantClassName = variant === "compact" ? " compact" : "";
+
   return (
-    <div className="table-shell">
-      <table className="standings-table">
+    <div className={`table-shell${variantClassName}`}>
+      <table className={`standings-table${variantClassName}`}>
         <thead>
           <tr>
             <th>排名</th>
@@ -35,7 +36,7 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
             const goalDifference = standing.goalsFor - standing.goalsAgainst;
 
             return (
-              <tr className={`standing-status-${getStatusClass(standing.status)}`} key={standing.teamId}>
+              <tr className={`standing-status-${getRowToneClass(index)}`} key={standing.teamId}>
                 <td>{index + 1}</td>
                 <td className="team-cell">
                   <TeamName teamId={standing.teamId} />
