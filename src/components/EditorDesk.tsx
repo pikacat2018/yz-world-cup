@@ -36,7 +36,8 @@ import type { NewsItem } from "../news/types";
 const MAX_NESTING_LEVEL = 2;
 
 const getOriginalLink = (item: FollowUpItem) => item.url || item.externalUrl || "";
-const canEditFollowUpTitle = (item: FollowUpItem) => item.type === "manual" || (item.source === "reddit" && item.sourceVariant?.includes("hot"));
+const canEditFollowUpTitle = (item: FollowUpItem) =>
+  item.type === "manual" || getFollowUpPlacement(item) === "manual" || (item.source === "reddit" && item.sourceVariant?.includes("hot"));
 
 type FollowUpTreeRow = {
   item: FollowUpItem;
