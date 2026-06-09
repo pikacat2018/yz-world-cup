@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import EditorDesk from "./EditorDesk";
 import GroupRadar from "./GroupRadar";
+import MatchRecordDialog from "./MatchRecordDialog";
 import MessagePanel from "./MessagePanel";
 import RightRail from "./RightRail";
 import type { AppTheme } from "./ThemeToggle";
@@ -51,6 +52,7 @@ function getDesktopGridTemplateColumns(order: DesktopColumnId[]) {
 export default function Layout({ onThemeChange, selectedGroupId, theme, onSelectGroup }: LayoutProps) {
   const [activeMobileColumn, setActiveMobileColumn] = useState<MobileColumn>("news");
   const [selectedMatch, setSelectedMatch] = useState<Match | undefined>();
+  const [recordMatch, setRecordMatch] = useState<Match | undefined>();
   const [desktopColumnOrder, setDesktopColumnOrder] = useState<DesktopColumnId[]>(readDesktopColumnOrder);
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
 
@@ -112,6 +114,7 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
             selectedMatch={selectedMatch}
             onSelectGroup={selectGroupFromRadar}
             onSelectMatch={setSelectedMatch}
+            onOpenMatchRecord={setRecordMatch}
           />
         </div>
       );
@@ -140,6 +143,7 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
         onToggleColumnSettings={() => setIsColumnSettingsOpen((open) => !open)}
         theme={theme}
       />
+      <MatchRecordDialog match={recordMatch} onClose={() => setRecordMatch(undefined)} />
       <div className="main-stage">
         {isColumnSettingsOpen && (
           <section className="desktop-column-layout-tools" aria-label="桌面栏目顺序设置">

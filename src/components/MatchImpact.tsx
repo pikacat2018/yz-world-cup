@@ -1,16 +1,38 @@
+import { useEffect, useMemo, useState } from "react";
 import type { Match } from "../data/mockWorldCup";
+import { getMatchRecordBadge, hydrateMatchRecords, MATCH_RECORD_UPDATED_EVENT, readMatchRecords } from "../matches/matchRecordStore";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
 
 type MatchImpactProps = {
   matches: Match[];
+  onOpenMatchRecord?: (match: Match) => void;
 };
 
-export default function MatchImpact({ matches }: MatchImpactProps) {
+export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactProps) {
+  const [recordVersion, setRecordVersion] = useState(0);
+  const recordByMatchId = useMemo(
+    () => new Map(readMatchRecords().map((record) => [record.matchId, record])),
+    [recordVersion],
+  );
+
+  useEffect(() => {
+    if (!onOpenMatchRecord) return undefined;
+
+    const updateRecords = () => setRecordVersion((version) => version + 1);
+    window.addEventListener(MATCH_RECORD_UPDATED_EVENT, updateRecords);
+    void hydrateMatchRecords().catch((error) => {
+      console.warn("[match-records] hydrate failed", error);
+    });
+
+    return () => window.removeEventListener(MATCH_RECORD_UPDATED_EVENT, updateRecords);
+  }, [onOpenMatchRecord]);
+
   return (
     <div className="match-impact-stream">
       {matches.map((match) => {
         const beijingTime = getBeijingDateTime(match);
+        const hasRecord = Boolean(getMatchRecordBadge(recordByMatchId.get(match.id)));
         const scorerCounts = new Map<string, number>();
         const goals = (match.goals ?? []).map((goal) => {
           const scorerKey = `${goal.side}:${goal.player}`;
@@ -21,7 +43,10 @@ export default function MatchImpact({ matches }: MatchImpactProps) {
         });
 
         return (
-          <article className={`impact-row impact-${match.status}`} key={match.id}>
+          <article
+            className={`impact-row impact-${match.status} ${onOpenMatchRecord ? "has-record-action" : ""}`}
+            key={match.id}
+          >
             <span className="impact-stage">{match.stage}</span>
             <span className="impact-match-no">M{String(match.matchNo).padStart(2, "0")}</span>
             <time className="impact-time">
@@ -63,11 +88,11 @@ export default function MatchImpact({ matches }: MatchImpactProps) {
                   <div className="impact-penalty-round" key={round.round}>
                     <span className="impact-penalty-player home">{round.home?.player ?? ""}</span>
                     <span className="impact-penalty-result home">
-                      {round.home ? (round.home.scored ? "✅" : "❌") : ""}
+                      {round.home ? (round.home.scored ? "✓" : "×") : ""}
                     </span>
                     <span className="impact-penalty-no">{round.round}</span>
                     <span className="impact-penalty-result away">
-                      {round.away ? (round.away.scored ? "✅" : "❌") : ""}
+                      {round.away ? (round.away.scored ? "✓" : "×") : ""}
                     </span>
                     <span className="impact-penalty-player away">{round.away?.player ?? ""}</span>
                   </div>
@@ -77,6 +102,16 @@ export default function MatchImpact({ matches }: MatchImpactProps) {
             <div className="impact-venue" title={match.venue}>
               {match.venue}
             </div>
+            {onOpenMatchRecord ? (
+              <button
+                aria-label={`记录 M${String(match.matchNo).padStart(2, "0")} 比赛`}
+                className={`match-record-chip impact-record-chip ${hasRecord ? "active" : ""}`}
+                onClick={() => onOpenMatchRecord(match)}
+                type="button"
+              >
+                {hasRecord ? "★" : "☆"}
+              </button>
+            ) : null}
           </article>
         );
       })}

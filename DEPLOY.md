@@ -33,20 +33,21 @@ dist
 ```text
 VITE_SHARED_EDITING=true
 EDITOR_ACCESS_CODE=choose-a-private-editor-code
+EDITOR_ACCESS_CODES=editor-a,editor-b,editor-c,editor-d
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
-`VITE_SHARED_EDITING` is visible to the browser and only turns on the access-code screen. The other three variables are read by Cloudflare Functions only.
+`VITE_SHARED_EDITING` is visible to the browser and only turns on the access-code screen. The other variables are read by Cloudflare Functions only. `EDITOR_ACCESS_CODE` keeps the old single-code setup working; use `EDITOR_ACCESS_CODES` for separate editor codes.
 
 ## 3. Share With Editors
 
 Give editors:
 
 1. The Cloudflare Pages site URL.
-2. The editor access code.
+2. Their editor access code.
 
-The browser stores the access code locally and uses it only when calling `/api/shared-state`. Supabase credentials stay on the server.
+The browser stores the access code locally and uses it when calling editor APIs. Shared editorial state stays shared across valid codes. Match records are stored separately per access-code hash. Supabase credentials stay on the server.
 
 ## 4. What Syncs
 
@@ -58,6 +59,8 @@ These editor states are shared:
 - Reddit hot seen markers
 - follow-up items
 
+Match records sync across devices for the same editor access code, but do not sync between different editor access codes.
+
 The app polls shared state every 5 seconds. A local edit is applied immediately in that editor's browser and then pushed to Supabase through Cloudflare Functions.
 
 ## 5. Production API Routes
@@ -66,6 +69,8 @@ Cloudflare Pages Functions provide:
 
 - `/api/shared-state`
 - `/api/shared-state/:key`
+- `/api/match-records`
+- `/api/match-records/:matchId`
 - `/api/reddit/collect`
 - `/api/zhibo8/detail`
 

@@ -24,9 +24,19 @@ const getAllowedAccessCodes = (env: Env) => [
   ...(env.EDITOR_ACCESS_CODE ? [env.EDITOR_ACCESS_CODE.trim()] : []),
 ];
 
-const isAllowedAccessCode = (env: Env, request: Request) => {
+const toHex = (bytes: ArrayBuffer) =>
+  Array.from(new Uint8Array(bytes))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+
+const getRecordUserId = async (env: Env, request: Request) => {
   const accessCode = getAccessCode(request);
-  return Boolean(accessCode && getAllowedAccessCodes(env).includes(accessCode));
+  const allowedCodes = getAllowedAccessCodes(env);
+
+  if (!accessCode || !allowedCodes.includes(accessCode)) return "";
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(accessCode));
+  return toHex(digest);
 };
 
 const getSupabaseHeaders = (env: Env) => ({
@@ -36,18 +46,18 @@ const getSupabaseHeaders = (env: Env) => ({
 });
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  if (!isAllowedAccessCode(env, request)) {
-    return json({ error: "access_denied" }, 403);
-  }
+  const recordUserId = await getRecordUserId(env, request);
+  if (!recordUserId) return json({ error: "access_denied" }, 403);
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-    return json({ error: "shared_state_not_configured" }, 503);
+    return json({ error: "match_records_not_configured" }, 503);
   }
 
-  const endpoint = `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/editor_state`;
-  const response = await fetch(`${endpoint}?select=key,value,updated_at`, {
-    headers: getSupabaseHeaders(env),
-  });
+  const endpoint = `${env.SUPABASE_URL.replace(/\/$/, "")}/rest/v1/match_records`;
+  const response = await fetch(
+    `${endpoint}?record_user_id=eq.${encodeURIComponent(recordUserId)}&select=match_id,record,updated_at&order=match_id.asc`,
+    { headers: getSupabaseHeaders(env) },
+  );
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -62,12 +72,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
     );
   }
 
-  const rows = (await response.json()) as Array<{ key: string; value: unknown; updated_at: string }>;
+  const rows = (await response.json()) as Array<{ match_id: string; record: unknown; updated_at: string }>;
   return json({
-    documents: rows.map((row) => ({
-      key: row.key,
-      updatedAt: row.updated_at,
-      value: row.value,
-    })),
+    records: rows.map((row) => row.record),
+    updatedAt: rows.reduce((latest, row) => (row.updated_at > latest ? row.updated_at : latest), ""),
   });
 };

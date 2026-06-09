@@ -5,6 +5,7 @@ import StandingsTable from "./StandingsTable";
 type GroupRadarProps = {
   selectedGroupId: string;
   selectedMatch?: Match;
+  onOpenMatchRecord: (match: Match) => void;
   onSelectGroup: (groupId: string) => void;
   onSelectMatch: (match: Match) => void;
 };
@@ -21,7 +22,13 @@ const getStageOptionLabel = (stage: string) => {
 const findFirstStageMatch = (stage: string) =>
   allMatches.find((match) => match.groupId === "KO" && match.stage === stage);
 
-export default function GroupRadar({ selectedGroupId, selectedMatch, onSelectGroup, onSelectMatch }: GroupRadarProps) {
+export default function GroupRadar({
+  selectedGroupId,
+  selectedMatch,
+  onOpenMatchRecord,
+  onSelectGroup,
+  onSelectMatch,
+}: GroupRadarProps) {
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
   const selectedStage =
     selectedMatch?.groupId === "KO" && knockoutStages.includes(selectedMatch.stage) ? selectedMatch.stage : undefined;
@@ -80,14 +87,14 @@ export default function GroupRadar({ selectedGroupId, selectedMatch, onSelectGro
             <strong>{stageMatches.length} 场</strong>
           </div>
           <div className="radar-match-list" aria-label={`${getStageOptionLabel(selectedStage)}比赛`}>
-            <MatchImpact matches={stageMatches} />
+            <MatchImpact matches={stageMatches} onOpenMatchRecord={onOpenMatchRecord} />
           </div>
         </div>
       ) : (
         <div className="radar-summary-card">
           <StandingsTable standings={selectedGroup.standings} />
           <div className="radar-match-list" aria-label={`${selectedGroup.id}组比赛`}>
-            <MatchImpact matches={selectedGroup.matches} />
+            <MatchImpact matches={selectedGroup.matches} onOpenMatchRecord={onOpenMatchRecord} />
           </div>
         </div>
       )}

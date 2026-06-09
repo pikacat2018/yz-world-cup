@@ -1,5 +1,6 @@
 type Env = {
   EDITOR_ACCESS_CODE?: string;
+  EDITOR_ACCESS_CODES?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
 };
@@ -25,6 +26,19 @@ const json = (value: unknown, status = 200) =>
 
 const getAccessCode = (request: Request) => request.headers.get("X-Editor-Access-Code")?.trim() ?? "";
 
+const getAllowedAccessCodes = (env: Env) => [
+  ...(env.EDITOR_ACCESS_CODES ?? "")
+    .split(",")
+    .map((code) => code.trim())
+    .filter(Boolean),
+  ...(env.EDITOR_ACCESS_CODE ? [env.EDITOR_ACCESS_CODE.trim()] : []),
+];
+
+const isAllowedAccessCode = (env: Env, request: Request) => {
+  const accessCode = getAccessCode(request);
+  return Boolean(accessCode && getAllowedAccessCodes(env).includes(accessCode));
+};
+
 const getBaseUpdatedAt = (request: Request) => request.headers.get("X-Shared-State-Base-Updated-At")?.trim() ?? "";
 
 const getSupabaseHeaders = (env: Env) => ({
@@ -34,7 +48,7 @@ const getSupabaseHeaders = (env: Env) => ({
 });
 
 export const onRequest: PagesFunction<Env> = async ({ env, params, request }) => {
-  if (!env.EDITOR_ACCESS_CODE || getAccessCode(request) !== env.EDITOR_ACCESS_CODE) {
+  if (!isAllowedAccessCode(env, request)) {
     return json({ error: "access_denied" }, 403);
   }
 
