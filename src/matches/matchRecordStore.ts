@@ -27,6 +27,7 @@ export type MatchRecord = {
 
 export const MATCH_RECORD_STORAGE_KEY = "yz-world-cup-match-records-v1";
 export const MATCH_RECORD_UPDATED_EVENT = "yz-world-cup-match-record-updated";
+export const MATCH_RECORD_CODE_STORAGE_KEY = "yz-world-cup-match-record-code";
 
 const API_BASE = "/api/match-records";
 const MAX_MATCH_RECORDS = 500;
@@ -65,16 +66,38 @@ const getRecordTime = (record: Pick<MatchRecord, "updatedAt">) => {
 };
 
 const getScopedStorageKey = () => {
-  const accessCode = getEditorAccessCode();
-  return accessCode ? `${MATCH_RECORD_STORAGE_KEY}:${accessCode}` : MATCH_RECORD_STORAGE_KEY;
+  const recordCode = getMatchRecordCode();
+  return recordCode ? `${MATCH_RECORD_STORAGE_KEY}:${recordCode}` : MATCH_RECORD_STORAGE_KEY;
 };
 
 const getRequestHeaders = () => ({
   "Content-Type": "application/json",
   "X-Editor-Access-Code": getEditorAccessCode(),
+  "X-Match-Record-Code": getMatchRecordCode(),
 });
 
-const canUseRemoteRecords = () => isSharedEditingEnabled() && Boolean(getEditorAccessCode());
+const canUseRemoteRecords = () => isSharedEditingEnabled() && Boolean(getEditorAccessCode()) && Boolean(getMatchRecordCode());
+
+export function getMatchRecordCode() {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(MATCH_RECORD_CODE_STORAGE_KEY) || "";
+}
+
+export function hasMatchRecordCode() {
+  return Boolean(getMatchRecordCode());
+}
+
+export function saveMatchRecordCode(code: string) {
+  window.localStorage.setItem(MATCH_RECORD_CODE_STORAGE_KEY, code.trim());
+  resetMatchRecordHydration();
+  notifyMatchRecordsUpdated();
+}
+
+export function clearMatchRecordCode() {
+  window.localStorage.removeItem(MATCH_RECORD_CODE_STORAGE_KEY);
+  resetMatchRecordHydration();
+  notifyMatchRecordsUpdated();
+}
 
 function saveMatchRecordsLocal(records: MatchRecord[]) {
   const byMatchId = new Map<string, MatchRecord>();

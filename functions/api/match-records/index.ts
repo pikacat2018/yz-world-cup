@@ -16,6 +16,8 @@ const json = (value: unknown, status = 200) =>
 
 const getAccessCode = (request: Request) => request.headers.get("X-Editor-Access-Code")?.trim() ?? "";
 
+const getMatchRecordCode = (request: Request) => request.headers.get("X-Match-Record-Code")?.trim() ?? "";
+
 const getAllowedAccessCodes = (env: Env) => [
   ...(env.EDITOR_ACCESS_CODES ?? "")
     .split(",")
@@ -29,13 +31,18 @@ const toHex = (bytes: ArrayBuffer) =>
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-const getRecordUserId = async (env: Env, request: Request) => {
+const isAllowedAccessCode = (env: Env, request: Request) => {
   const accessCode = getAccessCode(request);
   const allowedCodes = getAllowedAccessCodes(env);
 
-  if (!accessCode || !allowedCodes.includes(accessCode)) return "";
+  return Boolean(accessCode && allowedCodes.includes(accessCode));
+};
 
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(accessCode));
+const getRecordUserId = async (request: Request) => {
+  const recordCode = getMatchRecordCode(request);
+  if (!recordCode) return "";
+
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(recordCode));
   return toHex(digest);
 };
 
@@ -46,8 +53,10 @@ const getSupabaseHeaders = (env: Env) => ({
 });
 
 export const onRequestGet: PagesFunction<Env> = async ({ env, request }) => {
-  const recordUserId = await getRecordUserId(env, request);
-  if (!recordUserId) return json({ error: "access_denied" }, 403);
+  if (!isAllowedAccessCode(env, request)) return json({ error: "access_denied" }, 403);
+
+  const recordUserId = await getRecordUserId(request);
+  if (!recordUserId) return json({ error: "missing_match_record_code" }, 400);
 
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return json({ error: "match_records_not_configured" }, 503);

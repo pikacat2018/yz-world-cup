@@ -8406,6 +8406,38 @@ p,
   max-height: min(720px, 88vh);
 }
 
+.match-record-code-modal {
+  grid-template-rows: auto auto auto auto;
+  width: min(420px, 92vw);
+}
+
+.match-record-code-field {
+  display: grid;
+  gap: 6px;
+}
+
+.match-record-code-field span,
+.match-record-code-note {
+  color: var(--theme-text-muted, var(--text-muted));
+  font-size: 0.7rem;
+}
+
+.match-record-code-field input {
+  min-width: 0;
+  border: 1px solid var(--theme-divider-soft, var(--border-muted));
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: var(--theme-text-main, var(--text-primary));
+  background: var(--theme-bg-surface, var(--bg-panel-soft));
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.match-record-code-note {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .match-record-matchline {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 48px minmax(0, 1fr);

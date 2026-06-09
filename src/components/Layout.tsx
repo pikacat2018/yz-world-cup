@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import EditorDesk from "./EditorDesk";
 import GroupRadar from "./GroupRadar";
+import MatchRecordCodeDialog from "./MatchRecordCodeDialog";
 import MatchRecordDialog from "./MatchRecordDialog";
 import MessagePanel from "./MessagePanel";
 import RightRail from "./RightRail";
 import type { AppTheme } from "./ThemeToggle";
 import TopTickerPlaceholder from "./TopTickerPlaceholder";
 import type { Match } from "../data/mockWorldCup";
+import { hasMatchRecordCode } from "../matches/matchRecordStore";
 import {
   type DesktopColumnId,
   readDesktopColumnOrder,
@@ -53,6 +55,8 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
   const [activeMobileColumn, setActiveMobileColumn] = useState<MobileColumn>("news");
   const [selectedMatch, setSelectedMatch] = useState<Match | undefined>();
   const [recordMatch, setRecordMatch] = useState<Match | undefined>();
+  const [pendingRecordMatch, setPendingRecordMatch] = useState<Match | undefined>();
+  const [isRecordCodeOpen, setIsRecordCodeOpen] = useState(false);
   const [desktopColumnOrder, setDesktopColumnOrder] = useState<DesktopColumnId[]>(readDesktopColumnOrder);
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
 
@@ -75,6 +79,16 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
     setSelectedMatch(match);
     if (match.groupId !== "KO") onSelectGroup(match.groupId);
     setActiveMobileColumn("radar");
+  };
+
+  const openMatchRecord = (match: Match) => {
+    if (hasMatchRecordCode()) {
+      setRecordMatch(match);
+      return;
+    }
+
+    setPendingRecordMatch(match);
+    setIsRecordCodeOpen(true);
   };
 
   const moveDesktopColumn = (columnId: DesktopColumnId, direction: -1 | 1) => {
@@ -114,7 +128,7 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
             selectedMatch={selectedMatch}
             onSelectGroup={selectGroupFromRadar}
             onSelectMatch={setSelectedMatch}
-            onOpenMatchRecord={setRecordMatch}
+            onOpenMatchRecord={openMatchRecord}
           />
         </div>
       );
@@ -144,6 +158,19 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
         theme={theme}
       />
       <MatchRecordDialog match={recordMatch} onClose={() => setRecordMatch(undefined)} />
+      {isRecordCodeOpen ? (
+        <MatchRecordCodeDialog
+          onClose={() => {
+            setIsRecordCodeOpen(false);
+            setPendingRecordMatch(undefined);
+          }}
+          onSaved={() => {
+            setIsRecordCodeOpen(false);
+            setRecordMatch(pendingRecordMatch);
+            setPendingRecordMatch(undefined);
+          }}
+        />
+      ) : null}
       <div className="main-stage">
         {isColumnSettingsOpen && (
           <section className="desktop-column-layout-tools" aria-label="桌面栏目顺序设置">
