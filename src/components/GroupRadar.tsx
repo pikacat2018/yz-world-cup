@@ -1,4 +1,5 @@
-import { allMatches, groups, type Match } from "../data/mockWorldCup";
+import type { Match } from "../data/mockWorldCup";
+import { useWorldCupData } from "../matches/worldCupDataStore";
 import MatchImpact from "./MatchImpact";
 import StandingsTable from "./StandingsTable";
 
@@ -19,9 +20,6 @@ const getStageOptionLabel = (stage: string) => {
   return stage;
 };
 
-const findFirstStageMatch = (stage: string) =>
-  allMatches.find((match) => match.groupId === "KO" && match.stage === stage);
-
 export default function GroupRadar({
   selectedGroupId,
   selectedMatch,
@@ -29,6 +27,9 @@ export default function GroupRadar({
   onSelectGroup,
   onSelectMatch,
 }: GroupRadarProps) {
+  const { allMatches, groups } = useWorldCupData();
+  const findFirstStageMatch = (stage: string) =>
+    allMatches.find((match) => match.groupId === "KO" && match.stage === stage);
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0];
   const selectedStage =
     selectedMatch?.groupId === "KO" && knockoutStages.includes(selectedMatch.stage) ? selectedMatch.stage : undefined;

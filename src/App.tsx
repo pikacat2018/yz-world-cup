@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AllGroupsOverview from "./components/AllGroupsOverview";
 import AllSchedulePage from "./components/AllSchedulePage";
 import EditorAccessGate from "./components/EditorAccessGate";
 import Layout from "./components/Layout";
 import { type AppTheme, isAppTheme, THEME_STORAGE_KEY } from "./components/ThemeToggle";
-import { groups } from "./data/mockWorldCup";
+import { useWorldCupData } from "./matches/worldCupDataStore";
 import { useSingleActiveTab } from "./shared/singleActiveTab";
 
 function PassiveWorkspaceNotice({ onRetry, status }: { onRetry: () => void; status: "checking" | "passive" }) {
@@ -13,45 +13,53 @@ function PassiveWorkspaceNotice({ onRetry, status }: { onRetry: () => void; stat
       <section className="editor-access-panel passive-workspace-panel" aria-live="polite">
         <span className="eyebrow">EDITOR ACCESS</span>
         <h1>工作台已在另一个标签页打开</h1>
-        <p>{status === "checking" ? "正在检测活动标签页。" : "此页面已暂停同步、新闻刷新和编辑入口，避免重复消耗请求。"}</p>
+        <p>{status === "checking" ? "正在检测活动标签页。" : "当前页面已暂停同步、新闻刷新和编辑入口，避免重复消耗请求。"}</p>
         <button onClick={onRetry} type="button">
-          刷新检测/尝试接管
+          刷新检测并尝试接管
         </button>
       </section>
     </main>
   );
 }
 
-function getInitialSelectedGroupId() {
-  if (typeof window === "undefined") return "A";
+function getInitialSelectedGroupId(validGroupIds: string[]) {
+  if (typeof window === "undefined") return validGroupIds[0] ?? "A";
 
   const groupId = new URLSearchParams(window.location.search).get("group");
-  return groupId && groups.some((group) => group.id === groupId) ? groupId : "A";
+  return groupId && validGroupIds.includes(groupId) ? groupId : (validGroupIds[0] ?? "A");
 }
 
 function EditorWorkspace({ onThemeChange, theme }: { onThemeChange: (theme: AppTheme) => void; theme: AppTheme }) {
-  const [selectedGroupId, setSelectedGroupId] = useState(getInitialSelectedGroupId);
+  const { groups } = useWorldCupData();
+  const validGroupIds = useMemo(() => groups.map((group) => group.id), [groups]);
+  const [selectedGroupId, setSelectedGroupId] = useState(() => getInitialSelectedGroupId(validGroupIds));
+
+  useEffect(() => {
+    if (!validGroupIds.includes(selectedGroupId)) {
+      setSelectedGroupId(validGroupIds[0] ?? "A");
+    }
+  }, [selectedGroupId, validGroupIds]);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       if (event.data?.type !== "select-group") return;
-      if (!groups.some((group) => group.id === event.data.groupId)) return;
+      if (!validGroupIds.includes(event.data.groupId)) return;
 
       setSelectedGroupId(event.data.groupId);
     };
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [validGroupIds]);
 
   return (
     <EditorAccessGate>
       <Layout
         onThemeChange={onThemeChange}
+        onSelectGroup={setSelectedGroupId}
         selectedGroupId={selectedGroupId}
         theme={theme}
-        onSelectGroup={setSelectedGroupId}
       />
     </EditorAccessGate>
   );

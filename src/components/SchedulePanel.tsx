@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import type { Match } from "../data/mockWorldCup";
-import { allMatches, getTeam } from "../data/mockWorldCup";
+import { getTeam, type Match } from "../data/mockWorldCup";
+import { useWorldCupData } from "../matches/worldCupDataStore";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
 
@@ -16,11 +16,9 @@ const splitScore = (score?: string) => {
 };
 
 const getStageLabel = (match: Match) => {
-  if (match.groupId !== "KO") return `${match.groupId}组`;
-
-  if (match.stage === "32 强") return "1/16决赛";
-  if (match.stage === "16 强") return "1/8决赛";
-
+  if (match.groupId !== "KO") return `${match.groupId} 组`;
+  if (match.stage === "32 强") return "1/16 决赛";
+  if (match.stage === "16 强") return "1/8 决赛";
   return match.stage;
 };
 
@@ -29,9 +27,10 @@ type SchedulePanelProps = {
 };
 
 export default function SchedulePanel({ onSelectMatch }: SchedulePanelProps) {
+  const { allMatches } = useWorldCupData();
   const matchDates = useMemo(
     () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).date))),
-    [],
+    [allMatches],
   );
   const [selectedDate, setSelectedDate] = useState(matchDates[0] ?? "");
   const activeDateIndex = matchDates.indexOf(selectedDate);

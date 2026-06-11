@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { allMatches, getTeam, teams, type Match } from "../data/mockWorldCup";
-import {
-  getLastFifaSyncAt,
-  shouldRunDailyFifaSync,
-  syncFifaSchedule,
-  type FifaSyncResult,
-} from "../services/fifaScheduleSync";
+import { getTeam, teams, type Match } from "../data/mockWorldCup";
+import { hydrateWorldCupSnapshot, useWorldCupData } from "../matches/worldCupDataStore";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
 
@@ -27,13 +22,13 @@ const splitScore = (score?: string) => {
 };
 
 const getStageFilter = (match: Match) => {
-  if (match.matchNo <= 72) return "group";
-  if (match.matchNo <= 88) return "r32";
-  if (match.matchNo <= 96) return "r16";
-  if (match.matchNo <= 100) return "quarter";
-  if (match.matchNo <= 102) return "semi";
-  if (match.matchNo === 103) return "third";
-  if (match.matchNo === 104) return "final";
+  if (match.groupId !== "KO") return "group";
+  if (match.stage === "32 强") return "r32";
+  if (match.stage === "16 强") return "r16";
+  if (match.stage === "1/4 决赛") return "quarter";
+  if (match.stage === "半决赛") return "semi";
+  if (match.stage === "三四名决赛") return "third";
+  if (match.stage === "决赛") return "final";
   return "group";
 };
 
@@ -55,28 +50,19 @@ const getVenueCountry = (venue: string) => {
 };
 
 const countryVenueOptions = [
-  { value: "country:usa", label: "🇺🇸 美国所有球场" },
-  { value: "country:canada", label: "🇨🇦 加拿大所有球场" },
-  { value: "country:mexico", label: "🇲🇽 墨西哥所有球场" },
+  { value: "country:usa", label: "美国全部球场" },
+  { value: "country:canada", label: "加拿大全部球场" },
+  { value: "country:mexico", label: "墨西哥全部球场" },
 ];
 
 const countryLabel = {
-  usa: "🇺🇸",
-  canada: "🇨🇦",
-  mexico: "🇲🇽",
+  canada: "加拿大",
+  mexico: "墨西哥",
+  usa: "美国",
 } as const;
 
-const getSyncStatusText = (result: FifaSyncResult | null) => {
-  if (!result) {
-    return `上次同步：${getLastFifaSyncAt() ? new Date(getLastFifaSyncAt()!).toLocaleString("zh-CN") : "尚未同步"}`;
-  }
-
-  if (result.ok) return result.message;
-  return result.message.replace("。如果浏览器拦截跨域请求，需要后端代理执行官方同步。", "");
-};
-
 export default function AllSchedulePage() {
-  const [syncResult, setSyncResult] = useState<FifaSyncResult | null>(null);
+  const { allMatches, fetchedAt, isFallback, source } = useWorldCupData();
   const [isSyncing, setIsSyncing] = useState(false);
   const [progressFilter, setProgressFilter] = useState("all");
   const [teamFilter, setTeamFilter] = useState("all");
@@ -85,11 +71,12 @@ export default function AllSchedulePage() {
   const [draftSelectedIds, setDraftSelectedIds] = useState<string[]>([]);
   const [confirmedSelectedIds, setConfirmedSelectedIds] = useState<string[]>([]);
 
-  const venues = useMemo(() => Array.from(new Set(allMatches.map((match) => match.venue))).sort(), []);
+  const venues = useMemo(() => Array.from(new Set(allMatches.map((match) => match.venue))).sort(), [allMatches]);
   const matchTimes = useMemo(
     () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).time))).sort(),
-    [],
+    [allMatches],
   );
+
   const displayedMatches = useMemo(() => {
     const filtered =
       confirmedSelectedIds.length > 0
@@ -109,7 +96,7 @@ export default function AllSchedulePage() {
           });
 
     return [...filtered].sort((a, b) => getBeijingDateTime(a).timestamp - getBeijingDateTime(b).timestamp);
-  }, [confirmedSelectedIds, progressFilter, teamFilter, timeFilter, venueFilter]);
+  }, [allMatches, confirmedSelectedIds, progressFilter, teamFilter, timeFilter, venueFilter]);
 
   const resultDensity =
     confirmedSelectedIds.length > 0 || teamFilter !== "all"
@@ -119,6 +106,7 @@ export default function AllSchedulePage() {
         : displayedMatches.length <= 3
           ? "few"
           : "many";
+
   const useBracketView =
     confirmedSelectedIds.length === 0 &&
     teamFilter === "all" &&
@@ -126,25 +114,31 @@ export default function AllSchedulePage() {
     progressFilter !== "group" &&
     displayedMatches.length > 0 &&
     displayedMatches.every((match) => match.groupId === "KO");
+
   const bracketMatches = [...displayedMatches].sort((a, b) => a.matchNo - b.matchNo);
   const bracketSplit = Math.ceil(bracketMatches.length / 2);
   const firstHalfMatches = bracketMatches.slice(0, bracketSplit);
   const secondHalfMatches = bracketMatches.slice(bracketSplit);
   const bracketClassName =
     `${progressFilter === "semi" ? "vertical" : displayedMatches.length <= 1 ? "single" : "halves"} stage-${progressFilter}`;
-  const syncStatusText = getSyncStatusText(syncResult);
+
+  const syncStatusText = isFallback
+    ? "当前显示本地 fallback 数据，请检查 FIFA 官方接口可用性后刷新。"
+    : fetchedAt
+      ? `主源 ${source} 最近刷新：${new Date(fetchedAt).toLocaleString("zh-CN")}`
+      : `主源 ${source} 已连接`;
 
   const runSync = async () => {
     setIsSyncing(true);
-    const result = await syncFifaSchedule();
-    setSyncResult(result);
-    setIsSyncing(false);
+    try {
+      await hydrateWorldCupSnapshot(true);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   useEffect(() => {
-    if (shouldRunDailyFifaSync()) {
-      void runSync();
-    }
+    void runSync();
   }, []);
 
   const toggleDraftSelection = (matchId: string) => {
@@ -166,6 +160,7 @@ export default function AllSchedulePage() {
     const beijingTime = getBeijingDateTime(match);
     const homeResult = score ? (score.home > score.away ? "winner" : score.home < score.away ? "loser" : "draw") : "";
     const awayResult = score ? (score.away > score.home ? "winner" : score.away < score.home ? "loser" : "draw") : "";
+    const stageMeta = match.groupId === "KO" ? `淘汰赛 | ${match.stage}` : `${match.groupId} 组 | ${match.stage}`;
 
     return (
       <article
@@ -173,18 +168,18 @@ export default function AllSchedulePage() {
         className={`schedule-page-card ${isSelected ? "selected" : ""}`}
         key={match.id}
         onClick={() => toggleDraftSelection(match.id)}
-        role="button"
-        tabIndex={0}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             toggleDraftSelection(match.id);
           }
         }}
+        role="button"
+        tabIndex={0}
       >
         <div className="schedule-card-topline">
           <span className="match-no">M{String(match.matchNo).padStart(2, "0")}</span>
-          <span className="schedule-meta">{match.groupId === "KO" ? "淘汰赛" : `${match.groupId} 组`} · {match.stage}</span>
+          <span className="schedule-meta">{stageMeta}</span>
         </div>
         <div className={`schedule-page-teams ${score ? "has-score" : ""}`}>
           <strong className={homeResult}>
@@ -213,18 +208,18 @@ export default function AllSchedulePage() {
         <div>
           <span className="eyebrow">FULL MATCH SCHEDULE</span>
           <h1>2026 世界杯全部赛程</h1>
-          <p>小组赛 M1-M72，淘汰赛 M73-M104。每日打开本页最多自动同步一次 FIFA 官方赛程页。</p>
+          <p>基础赛程、赛果、排名与进球时间线均来自 FIFA 官方公开接口。</p>
         </div>
         <div className="schedule-header-actions">
           <button className="overview-button large" disabled={isSyncing} onClick={runSync} type="button">
-            {isSyncing ? "同步中" : "手动同步"}
+            {isSyncing ? "刷新中" : "刷新数据"}
           </button>
-          <span className={`sync-inline-status ${syncResult?.ok ? "ok" : syncResult ? "failed" : ""}`} title={syncResult?.message ?? syncStatusText}>
+          <span className={`sync-inline-status ${isFallback ? "failed" : "ok"}`} title={syncStatusText}>
             {syncStatusText}
           </span>
           <a
             className="sync-inline-link"
-            href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums"
+            href="https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/scores-fixtures"
             rel="noreferrer"
             target="_blank"
           >
@@ -293,7 +288,12 @@ export default function AllSchedulePage() {
           >
             确定选中 {draftSelectedIds.length}
           </button>
-          <button className="overview-button" disabled={confirmedSelectedIds.length === 0} onClick={clearConfirmedSelection} type="button">
+          <button
+            className="overview-button"
+            disabled={confirmedSelectedIds.length === 0}
+            onClick={clearConfirmedSelection}
+            type="button"
+          >
             显示全部
           </button>
           <span>{displayedMatches.length} 场</span>
@@ -315,12 +315,6 @@ export default function AllSchedulePage() {
           </>
         ) : (
           displayedMatches.map(renderMatchCard)
-        )}
-        {displayedMatches.length === 0 && (
-          <div className="empty-schedule-state">
-            <strong>没有符合条件的比赛</strong>
-            <span>调整阶段、球队、球场或开赛时间后再查看。</span>
-          </div>
         )}
       </section>
     </main>

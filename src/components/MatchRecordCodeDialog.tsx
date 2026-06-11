@@ -8,6 +8,7 @@ type MatchRecordCodeDialogProps = {
 
 export default function MatchRecordCodeDialog({ onClose, onSaved }: MatchRecordCodeDialogProps) {
   const [code, setCode] = useState("");
+  const [isCodeVisible, setIsCodeVisible] = useState(false);
 
   const submitCode = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,16 +42,23 @@ export default function MatchRecordCodeDialog({ onClose, onSaved }: MatchRecordC
           </div>
         </div>
 
-        <label className="match-record-code-field">
-          <span>个人记录码</span>
+        <div className="match-record-code-field">
           <input
             autoFocus
+            aria-label="个人记录码"
             onChange={(event) => setCode(event.target.value)}
             placeholder="请输入并记住这个码"
-            type="password"
+            type={isCodeVisible ? "text" : "password"}
             value={code}
           />
-        </label>
+          <button
+            aria-label={isCodeVisible ? "隐藏个人记录码" : "显示个人记录码"}
+            onClick={() => setIsCodeVisible((visible) => !visible)}
+            type="button"
+          >
+            {isCodeVisible ? "隐藏" : "显示"}
+          </button>
+        </div>
 
         <p className="match-record-code-note">请务必记住：换设备需要输入同一个个人记录码，忘记后无法找回。</p>
 

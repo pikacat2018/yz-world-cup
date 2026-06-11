@@ -24,6 +24,7 @@ export type Match = {
   matchNo: number;
   groupId: string;
   date: string;
+  utcDate?: string;
   stage: string;
   homeTeamId?: string;
   awayTeamId?: string;

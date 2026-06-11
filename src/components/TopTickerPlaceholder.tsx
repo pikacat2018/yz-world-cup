@@ -1,5 +1,6 @@
 import { type CSSProperties, type Ref, useEffect, useMemo, useRef, useState } from "react";
-import { allMatches, getTeam, type Match } from "../data/mockWorldCup";
+import { getTeam, type Match } from "../data/mockWorldCup";
+import { readWorldCupSnapshot, useWorldCupData, WORLD_CUP_UPDATED_EVENT } from "../matches/worldCupDataStore";
 import { FOLLOW_UP_UPDATED_EVENT, getLocalDateKey, readFollowUpItems, type FollowUpItem } from "../news/followUpStore";
 import { readStoredNewsItems } from "../news/newsStore";
 import { BOTTOM_TICKER_UPDATED_EVENT } from "../news/ticker";
@@ -33,14 +34,14 @@ const formatFinishedMatch = (match: Match) => {
 const getFollowUpUrl = (item: FollowUpItem, newsUrlById: Map<string, string>) =>
   item.externalUrl ?? item.url ?? (item.sourceNewsId ? newsUrlById.get(item.sourceNewsId) : undefined);
 
-const buildTopTickerItems = (): TopTickerItem[] => {
+const buildTopTickerItems = (matches: Match[]): TopTickerItem[] => {
   const today = getLocalDateKey();
   const newsUrlById = new Map(
     readStoredNewsItems()
       .map((item) => [item.id, item.externalUrl ?? item.url] as const)
       .filter((entry): entry is readonly [string, string] => Boolean(entry[1])),
   );
-  const matchItems: TopTickerItem[] = allMatches
+  const matchItems: TopTickerItem[] = matches
     .filter((match) => match.status === "finished" && getMatchDateKey(match) === today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.matchNo - b.matchNo)
     .map((match) => ({
@@ -59,7 +60,7 @@ const buildTopTickerItems = (): TopTickerItem[] => {
     }));
 
   return [
-    ...(matchItems.length > 0 ? matchItems : [{ id: "match-empty", label: "赛果", text: "今日暂无已完赛" }]),
+    ...(matchItems.length > 0 ? matchItems : [{ id: "match-empty", label: "赛果", text: "今日暂无完赛比赛" }]),
     ...(followUpItems.length > 0 ? followUpItems : [{ id: "follow-empty", label: "跟进", text: "今日暂无跟进" }]),
   ];
 };
@@ -77,14 +78,16 @@ export default function TopTickerPlaceholder({
   onThemeChange,
   theme,
 }: TopTickerPlaceholderProps) {
-  const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(buildTopTickerItems);
+  const { allMatches } = useWorldCupData();
+  const [tickerItems, setTickerItems] = useState<TopTickerItem[]>(() => buildTopTickerItems(readWorldCupSnapshot().allMatches));
   const tickerContentRef = useRef<HTMLDivElement>(null);
   const [animationDuration, setAnimationDuration] = useState(TOP_TICKER_FALLBACK_DURATION);
   const statusCopy = useMemo(() => tickerItems.map((item) => `${item.label}: ${item.text}`).join(" / "), [tickerItems]);
 
   useEffect(() => {
-    const refreshTicker = () => setTickerItems(buildTopTickerItems());
+    const refreshTicker = () => setTickerItems(buildTopTickerItems(readWorldCupSnapshot().allMatches));
 
+    window.addEventListener(WORLD_CUP_UPDATED_EVENT, refreshTicker);
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
     window.addEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
     window.addEventListener("storage", refreshTicker);
@@ -92,12 +95,17 @@ export default function TopTickerPlaceholder({
     const intervalId = window.setInterval(refreshTicker, 60_000);
 
     return () => {
+      window.removeEventListener(WORLD_CUP_UPDATED_EVENT, refreshTicker);
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
       window.removeEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
       window.removeEventListener("storage", refreshTicker);
       window.clearInterval(intervalId);
     };
   }, []);
+
+  useEffect(() => {
+    setTickerItems(buildTopTickerItems(allMatches));
+  }, [allMatches]);
 
   useEffect(() => {
     const updateDuration = () => {
@@ -122,7 +130,7 @@ export default function TopTickerPlaceholder({
 
   return (
     <header className="top-ticker top-live-bar" aria-label="System status ticker">
-      <div className="ticker-label top-flash-label">英足滚动</div>
+      <div className="ticker-label top-flash-label">赛况滚动</div>
       <div className="system-ticker-content" style={{ "--top-ticker-duration": animationDuration } as CSSProperties} title={statusCopy}>
         <div className="system-ticker-track">
           <TopTickerContent contentRef={tickerContentRef} items={tickerItems} />
@@ -139,7 +147,7 @@ export default function TopTickerPlaceholder({
           title={isColumnSettingsOpen ? "收起栏目顺序" : "栏目顺序"}
           type="button"
         >
-          <span>序</span>
+          <span>栏</span>
         </button>
         <ThemeToggle onThemeChange={onThemeChange} theme={theme} />
       </div>

@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { collectRedditForApi, type RedditFetchJson, type RedditFetchText, type RedditVariant } from "./functions/api/reddit/collectCore";
+import { fetchWorldCupPayload } from "./functions/api/world-cup/core";
 
 const DEFAULT_REDDIT_SUBREDDIT = "soccer";
 const REQUEST_TIMEOUT_MS = 25_000;
@@ -203,6 +204,20 @@ const redditProxyPlugin = () => ({
             reason: error instanceof Error ? error.message : "unknown zhibo8 detail error",
           }),
         );
+      }
+    });
+    server.middlewares.use("/api/world-cup", async (_request, response) => {
+      try {
+        const payload = await fetchWorldCupPayload(process.env);
+        response.statusCode = 200;
+        response.setHeader("Cache-Control", "public, max-age=300, s-maxage=300");
+        response.setHeader("Content-Type", "application/json; charset=utf-8");
+        response.end(JSON.stringify(payload));
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "unknown_world_cup_fetch_error";
+        response.statusCode = reason === "football_data_api_key_missing" ? 503 : 502;
+        response.setHeader("Content-Type", "application/problem+json");
+        response.end(JSON.stringify({ error: "world_cup_fetch_failed", reason }));
       }
     });
   },

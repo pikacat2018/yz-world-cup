@@ -65,7 +65,7 @@ const zonedTimeToUtc = (dateTime: string, timeZone: string) => {
 export const getVenueTimeZone = (venue: string) => venueTimeZones[venue] ?? "America/New_York";
 
 export const getBeijingDateTime = (match: Match) => {
-  const utcDate = zonedTimeToUtc(match.date, getVenueTimeZone(match.venue));
+  const utcDate = match.utcDate ? new Date(match.utcDate) : zonedTimeToUtc(match.date, getVenueTimeZone(match.venue));
   const parts = getTimeZoneParts(utcDate, "Asia/Shanghai");
   const date = `${parts.year}-${parts.month}-${parts.day}`;
   const time = `${parts.hour}:${parts.minute}`;

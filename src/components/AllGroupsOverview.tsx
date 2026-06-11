@@ -1,10 +1,11 @@
 import type { KeyboardEvent } from "react";
-import { groups } from "../data/mockWorldCup";
+import { useWorldCupData } from "../matches/worldCupDataStore";
 import StandingsTable from "./StandingsTable";
 
-const isValidGroupId = (groupId: string) => groups.some((group) => group.id === groupId);
-
 export default function AllGroupsOverview() {
+  const { groups } = useWorldCupData();
+  const isValidGroupId = (groupId: string) => groups.some((group) => group.id === groupId);
+
   const closeOrReturnHome = () => {
     try {
       if (window.opener && !window.opener.closed) {

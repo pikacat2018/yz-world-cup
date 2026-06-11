@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { allMatches, getTeam, playerStats, storyEvents } from "../data/mockWorldCup";
-import type { Match } from "../data/mockWorldCup";
+import { getTeam, type Match, type MatchGoal } from "../data/mockWorldCup";
+import { useWorldCupData } from "../matches/worldCupDataStore";
 
 type BoardTab = "overview" | "scorers" | "assists" | "cards" | "events";
 
@@ -8,8 +8,8 @@ type BoardRow = {
   actionGroupId?: string;
   key: string;
   label?: string;
-  name: string;
   meta: string;
+  name: string;
   value: string;
 };
 
@@ -18,10 +18,27 @@ type DataBoardsProps = {
 };
 
 type ScoredMatch = {
-  match: Match;
-  homeGoals: number;
   awayGoals: number;
+  homeGoals: number;
+  match: Match;
 };
+
+type AggregatedScorer = {
+  goals: number;
+  groupId?: string;
+  matches: number[];
+  name: string;
+  ownGoals: number;
+  teamId?: string;
+};
+
+const tabs: { id: BoardTab; label: string }[] = [
+  { id: "overview", label: "概览" },
+  { id: "scorers", label: "进球" },
+  { id: "assists", label: "助攻" },
+  { id: "cards", label: "红黄牌" },
+  { id: "events", label: "事件" },
+];
 
 const parseScoredMatch = (match: Match): ScoredMatch | undefined => {
   if (match.status !== "finished" || !match.score) return undefined;
@@ -29,7 +46,7 @@ const parseScoredMatch = (match: Match): ScoredMatch | undefined => {
   const [home, away] = match.score.split("-").map(Number);
   if (!Number.isFinite(home) || !Number.isFinite(away)) return undefined;
 
-  return { match, homeGoals: home, awayGoals: away };
+  return { awayGoals: away, homeGoals: home, match };
 };
 
 const getTeamLabel = (teamId?: string, fallback?: string) => (teamId ? getTeam(teamId).name : fallback ?? "--");
@@ -37,7 +54,6 @@ const getTeamLabel = (teamId?: string, fallback?: string) => (teamId ? getTeam(t
 const formatMatchLabel = ({ match, homeGoals, awayGoals }: ScoredMatch) => {
   const home = getTeamLabel(match.homeTeamId, match.homeLabel);
   const away = getTeamLabel(match.awayTeamId, match.awayLabel);
-
   return `${home} ${homeGoals}-${awayGoals} ${away}`;
 };
 
@@ -59,35 +75,81 @@ const countMatchesByValue = (
   value?: number,
 ) => (value === undefined ? 0 : matches.filter((match) => getValue(match) === value).length);
 
-const formatTieSuffix = (tieCount: number) => (tieCount > 1 ? ` · 另 ${tieCount - 1} 项并列` : "");
+const formatTieSuffix = (tieCount: number) => (tieCount > 1 ? `，另有 ${tieCount - 1} 场并列` : "");
 
-const tabs: { id: BoardTab; label: string }[] = [
-  { id: "overview", label: "概览" },
-  { id: "scorers", label: "进球" },
-  { id: "assists", label: "助攻" },
-  { id: "cards", label: "红黄牌" },
-  { id: "events", label: "事件" },
+const createUnavailableRows = (message: string): BoardRow[] => [
+  {
+    key: message,
+    label: "",
+    meta: "",
+    name: message,
+    value: "--",
+  },
 ];
 
+function aggregateScorers(matches: Match[]) {
+  const scorerMap = new Map<string, AggregatedScorer>();
+  const singleMatchGoalRows: Array<{ goals: number; match: Match; player: string; teamLabel: string }> = [];
+
+  for (const match of matches) {
+    const goals = Array.isArray(match.goals) ? match.goals : [];
+    const goalsByPlayer = new Map<string, { count: number; ownGoals: number; side: MatchGoal["side"] }>();
+
+    for (const goal of goals) {
+      const key = `${goal.side}:${goal.player}`;
+      const current = goalsByPlayer.get(key) ?? { count: 0, ownGoals: 0, side: goal.side };
+      current.count += 1;
+      if (goal.ownGoal) current.ownGoals += 1;
+      goalsByPlayer.set(key, current);
+
+      const teamId = goal.side === "home" ? match.homeTeamId : match.awayTeamId;
+      const scorerKey = `${teamId ?? goal.side}:${goal.player}`;
+      const existing = scorerMap.get(scorerKey) ?? {
+        goals: 0,
+        groupId: match.groupId !== "KO" ? match.groupId : undefined,
+        matches: [],
+        name: goal.player,
+        ownGoals: 0,
+        teamId,
+      };
+      existing.goals += 1;
+      if (goal.ownGoal) existing.ownGoals += 1;
+      if (!existing.matches.includes(match.matchNo)) existing.matches.push(match.matchNo);
+      scorerMap.set(scorerKey, existing);
+    }
+
+    for (const [key, details] of goalsByPlayer) {
+      const [side, player] = key.split(":");
+      const teamId = side === "home" ? match.homeTeamId : match.awayTeamId;
+      singleMatchGoalRows.push({
+        goals: details.count,
+        match,
+        player,
+        teamLabel: getTeamLabel(teamId, side === "home" ? match.homeLabel : match.awayLabel),
+      });
+    }
+  }
+
+  const scorers = [...scorerMap.values()].sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name, "zh-CN"));
+  const topSingleMatch = [...singleMatchGoalRows].sort((a, b) => b.goals - a.goals || a.match.matchNo - b.match.matchNo)[0];
+  const topSingleMatchTieCount = topSingleMatch
+    ? singleMatchGoalRows.filter((row) => row.goals === topSingleMatch.goals).length
+    : 0;
+
+  return { scorers, topSingleMatch, topSingleMatchTieCount };
+}
+
 export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
+  const { allMatches, eventEnhancementStatus, isFallback } = useWorldCupData();
   const [activeTab, setActiveTab] = useState<BoardTab>("overview");
 
   const rows = useMemo<Record<BoardTab, BoardRow[]>>(() => {
-    const topScorer = playerStats.scorers[0];
-    const topAssist = playerStats.assists[0];
-    const cardWatch = playerStats.cards[0];
-    const topSingleMatchScorer = playerStats.singleMatchGoals[0];
-    const topSingleMatch = allMatches.find((match) => match.matchNo === topSingleMatchScorer?.matchNo);
-    const topSingleScoredMatch = topSingleMatch ? parseScoredMatch(topSingleMatch) : undefined;
-    const fallbackSingleMatchLabel =
-      topSingleMatchScorer && "match" in topSingleMatchScorer ? topSingleMatchScorer.match : undefined;
-    const singleMatchTieCount = topSingleMatchScorer?.goals
-      ? playerStats.singleMatchGoals.filter((item) => item.goals === topSingleMatchScorer.goals).length
-      : 0;
     const scoredMatches = allMatches.flatMap((match) => {
       const scoredMatch = parseScoredMatch(match);
       return scoredMatch ? [scoredMatch] : [];
     });
+    const { scorers, topSingleMatch, topSingleMatchTieCount } = aggregateScorers(allMatches);
+    const topScorer = scorers[0];
     const highestMarginMatch = pickMaxBy(scoredMatches, ({ homeGoals, awayGoals }) => Math.abs(homeGoals - awayGoals));
     const highestScoringMatch = pickMaxBy(scoredMatches, ({ homeGoals, awayGoals }) => homeGoals + awayGoals);
     const highestMargin = highestMarginMatch
@@ -107,88 +169,72 @@ export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
       highestGoalTotal,
     );
 
+    const overviewRows: BoardRow[] = [
+      {
+        actionGroupId: topScorer?.groupId,
+        key: "overview-scorer",
+        label: "头号射手",
+        meta: topScorer ? getTeamLabel(topScorer.teamId) : "--",
+        name: topScorer?.name ?? "暂无真实进球事件",
+        value: topScorer ? `${topScorer.goals} 球` : "--",
+      },
+      {
+        actionGroupId: topSingleMatch?.match.groupId !== "KO" ? topSingleMatch?.match.groupId : undefined,
+        key: "overview-single-match-goal",
+        label: "单场进球",
+        meta: topSingleMatch
+          ? `${formatMatchLabel(parseScoredMatch(topSingleMatch.match)!)}${formatTieSuffix(topSingleMatchTieCount)}`
+          : "--",
+        name: topSingleMatch ? `${topSingleMatch.player} | ${topSingleMatch.teamLabel}` : "等待 FIFA 事件增强",
+        value: topSingleMatch ? `${topSingleMatch.goals} 球` : "--",
+      },
+      {
+        key: "overview-margin",
+        label: "最大分差",
+        meta: highestMarginMatch
+          ? `M${String(highestMarginMatch.match.matchNo).padStart(2, "0")}${formatTieSuffix(highestMarginTieCount)}`
+          : "--",
+        name: highestMarginMatch ? formatMatchLabel(highestMarginMatch) : "暂无完赛结果",
+        value: highestMargin === undefined ? "--" : `${highestMargin} 球`,
+      },
+      {
+        key: "overview-total-goals",
+        label: "总进球最多",
+        meta: highestScoringMatch
+          ? `M${String(highestScoringMatch.match.matchNo).padStart(2, "0")}${formatTieSuffix(highestGoalTotalTieCount)}`
+          : "--",
+        name: highestScoringMatch ? formatMatchLabel(highestScoringMatch) : "暂无完赛结果",
+        value: highestGoalTotal === undefined ? "--" : `${highestGoalTotal} 球`,
+      },
+      {
+        key: "overview-source",
+        label: "数据状态",
+        meta: isFallback ? "fallback" : "fifa-official",
+        name: isFallback ? "当前仍在显示 fallback 比赛数据" : "基础赛程和积分榜已切到真实主源",
+        value: eventEnhancementStatus === "ready" ? "事件层已接通" : "事件层待补全",
+      },
+    ];
+
+    const scorerRows =
+      scorers.length > 0
+        ? scorers.slice(0, 12).map((item, index) => ({
+            actionGroupId: item.groupId,
+            key: `scorer-${item.name}-${index}`,
+            label: String(index + 1),
+            meta: `${getTeamLabel(item.teamId)} | M${item.matches.map((matchNo) => String(matchNo).padStart(2, "0")).join(", M")}`,
+            name: item.name,
+            value: item.ownGoals > 0 ? `${item.goals} 球 / 乌龙 ${item.ownGoals}` : `${item.goals}`,
+          }))
+        : createUnavailableRows("暂无真实进球事件");
+
     return {
-      overview: [
-        {
-          key: "overview-scorer",
-          label: "进球最多",
-          name: topScorer?.player ?? "--",
-          meta: topScorer?.team ?? "--",
-          value: topScorer?.goals ? `${topScorer.goals} 球` : "--",
-        },
-        {
-          key: "overview-assist",
-          label: "助攻最多",
-          name: topAssist?.player ?? "--",
-          meta: topAssist?.team ?? "--",
-          value: topAssist?.assists ? `${topAssist.assists} 助` : "--",
-        },
-        {
-          key: "overview-card",
-          label: "红黄牌",
-          name: cardWatch?.player ?? "--",
-          meta: cardWatch?.team ?? "--",
-          value: cardWatch ? `${cardWatch.yellowCards ?? 0}黄/${cardWatch.redCards ?? 0}红` : "--",
-        },
-        {
-          actionGroupId: topSingleMatch?.groupId !== "KO" ? topSingleMatch?.groupId : undefined,
-          key: "overview-single-match-goal",
-          label: "单场进球",
-          name: topSingleMatchScorer?.player ?? "--",
-          meta: topSingleMatchScorer
-            ? `${topSingleScoredMatch ? formatMatchLabel(topSingleScoredMatch) : fallbackSingleMatchLabel ?? "--"}${formatTieSuffix(singleMatchTieCount)}`
-            : "--",
-          value: topSingleMatchScorer?.goals ? `${topSingleMatchScorer.goals} 球` : "--",
-        },
-        {
-          key: "overview-margin",
-          label: "最大分差",
-          name: highestMarginMatch ? formatMatchLabel(highestMarginMatch) : "--",
-          meta: highestMarginMatch
-            ? `M${String(highestMarginMatch.match.matchNo).padStart(2, "0")}${formatTieSuffix(highestMarginTieCount)}`
-            : "--",
-          value: highestMargin === undefined ? "--" : `${highestMargin} 球`,
-        },
-        {
-          key: "overview-total-goals",
-          label: "最大比分",
-          name: highestScoringMatch ? formatMatchLabel(highestScoringMatch) : "--",
-          meta: highestScoringMatch
-            ? `M${String(highestScoringMatch.match.matchNo).padStart(2, "0")}${formatTieSuffix(highestGoalTotalTieCount)}`
-            : "--",
-          value: highestGoalTotal === undefined ? "--" : `${highestGoalTotal} 球`,
-        },
-      ],
-      scorers: playerStats.scorers.map((item) => ({
-        key: `scorer-${item.rank}`,
-        label: String(item.rank),
-        name: item.player,
-        meta: item.team,
-        value: `${item.goals ?? 0}`,
-      })),
-      assists: playerStats.assists.map((item) => ({
-        key: `assist-${item.rank}`,
-        label: String(item.rank),
-        name: item.player,
-        meta: item.team,
-        value: `${item.assists ?? 0}`,
-      })),
-      cards: playerStats.cards.map((item) => ({
-        key: `card-${item.rank}`,
-        label: String(item.rank),
-        name: item.player,
-        meta: item.team,
-        value: `${item.yellowCards ?? 0}黄/${item.redCards ?? 0}红`,
-      })),
-      events: storyEvents.map((event, index) => ({
-        actionGroupId: event.groupId,
-        key: `event-${event.label}-${index}`,
-        name: event.label,
-        meta: "",
-        value: event.value,
-      })),
+      assists: createUnavailableRows("当前页面暂未展示助攻明细"),
+      cards: createUnavailableRows("当前主源不含稳定红黄牌明细"),
+      events: createUnavailableRows("当前页面暂未展示更多事件流"),
+      overview: overviewRows,
+      scorers: scorerRows,
     };
-  }, []);
+  }, [allMatches, eventEnhancementStatus, isFallback]);
 
   return (
     <aside className="panel data-boards">
@@ -198,7 +244,7 @@ export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
         </div>
       </div>
 
-      <div className="data-board-tabs" role="tablist" aria-label="数据板切换">
+      <div className="data-board-tabs" aria-label="数据板切换" role="tablist">
         {tabs.map((tab) => (
           <button
             aria-selected={activeTab === tab.id}
@@ -220,9 +266,9 @@ export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
           }`;
           const rowContents = (
             <>
-              {activeTab !== "events" && <span>{row.label}</span>}
+              {activeTab !== "events" && row.label ? <span>{row.label}</span> : null}
               <strong>{row.name}</strong>
-              {activeTab !== "events" && <em>{row.meta}</em>}
+              {row.meta ? <em>{row.meta}</em> : null}
               <b>{row.value}</b>
             </>
           );
