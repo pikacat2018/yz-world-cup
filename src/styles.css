@@ -6226,6 +6226,26 @@ p {
   line-height: 1;
 }
 
+.impact-goal-player em.impact-card-marker {
+  min-width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #d84b4b;
+  font-size: 0.72rem;
+}
+
+.impact-goal-player em.impact-goal-marker {
+  min-width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #b89a5a;
+  font-size: 0.72rem;
+}
+
 .impact-score {
   display: grid;
   height: 25px;

@@ -34,6 +34,7 @@ export type Match = {
   status: "scheduled" | "live" | "finished";
   score?: string;
   goals?: MatchGoal[];
+  redCards?: MatchRedCard[];
   penaltyShootout?: PenaltyShootout;
   note: string;
 };
@@ -42,6 +43,12 @@ export type MatchGoal = {
   side: "home" | "away";
   minute: string;
   ownGoal?: boolean;
+  player: string;
+};
+
+export type MatchRedCard = {
+  side: "home" | "away";
+  minute: string;
   player: string;
 };
 

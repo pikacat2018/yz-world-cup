@@ -9,6 +9,24 @@ type MatchImpactProps = {
   onOpenMatchRecord?: (match: Match) => void;
 };
 
+type TimelineEvent =
+  | ({
+      kind: "goal";
+      count: number;
+      isLastForScorer: boolean;
+    } & NonNullable<Match["goals"]>[number])
+  | ({
+      kind: "red-card";
+    } & NonNullable<Match["redCards"]>[number]);
+
+function parseMinuteSortValue(minute: string) {
+  const match = minute.match(/^(\d+)(?:'\+(\d+))?'/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  const base = Number(match[1] ?? 0);
+  const extra = Number(match[2] ?? 0);
+  return base * 100 + extra;
+}
+
 export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactProps) {
   const [recordVersion, setRecordVersion] = useState(0);
   const recordByMatchId = useMemo(
@@ -52,6 +70,15 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
             isLastForScorer: count === (totalGoalsByScorer.get(scorerKey) ?? 0),
           };
         });
+        const events: TimelineEvent[] = [
+          ...goals.map((goal) => ({ ...goal, kind: "goal" as const })),
+          ...(match.redCards ?? []).map((card) => ({ ...card, kind: "red-card" as const })),
+        ].sort((left, right) => {
+          const minuteDiff = parseMinuteSortValue(left.minute) - parseMinuteSortValue(right.minute);
+          if (minuteDiff !== 0) return minuteDiff;
+          if (left.kind !== right.kind) return left.kind === "goal" ? -1 : 1;
+          return left.player.localeCompare(right.player, "en");
+        });
 
         return (
           <article
@@ -77,18 +104,22 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
                 {match.penaltyShootout.homeScore}-{match.penaltyShootout.awayScore}
               </div>
             ) : null}
-            {goals.length > 0 ? (
-              <div className="impact-goal-events" aria-label="进球事件">
-                {goals.map((goal, index) => (
-                  <div className={`impact-goal-event ${goal.side}`} key={`${goal.minute}-${goal.player}-${index}`}>
+            {events.length > 0 ? (
+              <div className="impact-goal-events impact-card-events" aria-label="比赛事件">
+                {events.map((event, index) => (
+                  <div className={`impact-goal-event ${event.side}`} key={`${event.kind}-${event.minute}-${event.player}-${index}`}>
                     <span className="impact-goal-player">
-                      {goal.side === "home" && goal.ownGoal ? <em>OG</em> : null}
-                      {goal.side === "home" && !goal.ownGoal && goal.count > 1 && goal.isLastForScorer ? <em>x{goal.count}</em> : null}
-                      <span>{goal.player}</span>
-                      {goal.side === "away" && !goal.ownGoal && goal.count > 1 && goal.isLastForScorer ? <em>x{goal.count}</em> : null}
-                      {goal.side === "away" && goal.ownGoal ? <em>OG</em> : null}
+                      {event.kind === "red-card" && event.side === "away" ? <em className="impact-card-marker" aria-hidden="true">■</em> : null}
+                      {event.kind === "goal" && event.side === "home" && event.ownGoal ? <em>OG</em> : null}
+                      {event.kind === "goal" && event.side === "home" && !event.ownGoal && event.count > 1 && event.isLastForScorer ? <em>x{event.count}</em> : null}
+                      {event.kind === "goal" && event.side === "away" ? <em className="impact-goal-marker" aria-hidden="true">⚽</em> : null}
+                      <span>{event.player}</span>
+                      {event.kind === "goal" && event.side === "home" ? <em className="impact-goal-marker" aria-hidden="true">⚽</em> : null}
+                      {event.kind === "goal" && event.side === "away" && !event.ownGoal && event.count > 1 && event.isLastForScorer ? <em>x{event.count}</em> : null}
+                      {event.kind === "goal" && event.side === "away" && event.ownGoal ? <em>OG</em> : null}
+                      {event.kind === "red-card" && event.side === "home" ? <em className="impact-card-marker" aria-hidden="true">■</em> : null}
                     </span>
-                    <span className="impact-goal-minute">{goal.minute}</span>
+                    <span className="impact-goal-minute">{event.minute}</span>
                   </div>
                 ))}
               </div>

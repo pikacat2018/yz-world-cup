@@ -102,6 +102,12 @@ type MatchGoal = {
   side: "away" | "home";
 };
 
+type MatchRedCard = {
+  minute: string;
+  player: string;
+  side: "away" | "home";
+};
+
 type PenaltyShootout = {
   awayScore: number;
   homeScore: number;
@@ -120,6 +126,7 @@ type MatchPayload = {
   matchNo: number;
   note: string;
   penaltyShootout?: PenaltyShootout;
+  redCards?: MatchRedCard[];
   score?: string;
   stage: string;
   status: "finished" | "live" | "scheduled";
@@ -216,6 +223,11 @@ const TEAM_CODE_TO_INTERNAL_ID: Record<string, string> = {
 };
 
 const GROUP_IDS = "ABCDEFGHIJKL".split("");
+const PLAYER_SHORT_NAME_ALIASES: Record<string, Record<string, string>> = {
+  mex: {
+    RAUL: "JIMENEZ",
+  },
+};
 
 const readEnvValue = (env: EnvLike, key: string) => {
   const value = env[key];
@@ -299,10 +311,50 @@ const extractGoalPlayerName = (description: string) => {
   return beforeScores || "Unknown";
 };
 
+const normalizePlayerToken = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+
+const resolveDisplayPlayerName = (teamId: string | undefined, rawName: string) => {
+  const trimmed = rawName.trim();
+  if (!trimmed) return rawName;
+  if (!teamId) return trimmed;
+
+  const normalizedToken = normalizePlayerToken(trimmed);
+  if (normalizedToken.includes(" ")) return trimmed;
+
+  return PLAYER_SHORT_NAME_ALIASES[teamId]?.[normalizedToken] ?? trimmed;
+};
+
+const extractCardPlayerName = (description: string) => {
+  const beforeBracket = description.split("(")[0]?.trim();
+  if (beforeBracket) {
+    const cleaned = beforeBracket
+      .replace(/\s+is shown a red card\.?$/i, "")
+      .replace(/\s+receives a red card\.?$/i, "")
+      .replace(/\s+sent off\.?$/i, "")
+      .trim();
+    if (!cleaned) return undefined;
+    const generic = cleaned.toLowerCase();
+    if (generic === "red card given" || generic === "red card" || generic === "sent off") return undefined;
+    return cleaned;
+  }
+  const fallback = description.trim();
+  if (!fallback) return undefined;
+  const generic = fallback.toLowerCase();
+  if (generic === "red card given" || generic === "red card" || generic === "sent off") return undefined;
+  return fallback;
+};
+
 function normalizeGoalEvents(match: FifaCalendarMatch, timeline?: FifaTimelineResponse) {
   const events = Array.isArray(timeline?.Event) ? timeline.Event : [];
-  const homeTeamId = match.Home?.IdTeam;
-  const awayTeamId = match.Away?.IdTeam;
+  const homeFifaTeamId = match.Home?.IdTeam;
+  const awayFifaTeamId = match.Away?.IdTeam;
+  const homeTeamId = normalizeTeamId(match.Home);
+  const awayTeamId = normalizeTeamId(match.Away);
   let lastHomeGoals = 0;
   let lastAwayGoals = 0;
 
@@ -326,9 +378,9 @@ function normalizeGoalEvents(match: FifaCalendarMatch, timeline?: FifaTimelineRe
       const label = getDescription(event.TypeLocalized).toLowerCase();
       const ownGoal = label.includes("own goal") || description.toLowerCase().includes("own goal");
       const side =
-        event.IdTeam && event.IdTeam === awayTeamId
+        event.IdTeam && event.IdTeam === awayFifaTeamId
           ? "away"
-          : event.IdTeam && event.IdTeam === homeTeamId
+          : event.IdTeam && event.IdTeam === homeFifaTeamId
             ? "home"
             : (event.AwayGoals ?? 0) > (event.HomeGoals ?? 0)
               ? "away"
@@ -337,10 +389,46 @@ function normalizeGoalEvents(match: FifaCalendarMatch, timeline?: FifaTimelineRe
       return {
         minute: event.MatchMinute ?? "",
         ownGoal: ownGoal || undefined,
-        player: extractGoalPlayerName(description),
+        player: resolveDisplayPlayerName(side === "home" ? homeTeamId : awayTeamId, extractGoalPlayerName(description)),
         side,
       } satisfies MatchGoal;
     });
+}
+
+function normalizeRedCardEvents(match: FifaCalendarMatch, timeline?: FifaTimelineResponse) {
+  const events = Array.isArray(timeline?.Event) ? timeline.Event : [];
+  const homeTeamId = match.Home?.IdTeam;
+  const awayTeamId = match.Away?.IdTeam;
+
+  const deduped = new Map<string, MatchRedCard>();
+
+  for (const event of events) {
+    const label = getDescription(event.TypeLocalized).toLowerCase();
+    const description = getDescription(event.EventDescription).toLowerCase();
+    if (!label.includes("red card") && !description.includes("red card") && !description.includes("sent off")) continue;
+
+    const player = extractCardPlayerName(getDescription(event.EventDescription));
+    if (!player) continue;
+
+    const side =
+      event.IdTeam && event.IdTeam === awayTeamId
+        ? "away"
+        : event.IdTeam && event.IdTeam === homeTeamId
+          ? "home"
+          : "home";
+
+    const card = {
+      minute: event.MatchMinute ?? "",
+      player,
+      side,
+    } satisfies MatchRedCard;
+
+    deduped.set(`${card.minute}|${card.side}|${card.player}`, card);
+  }
+
+  return [...deduped.values()]
+    .sort((a, b) => a.minute.localeCompare(b.minute, undefined, { numeric: true }))
+    ;
 }
 
 function normalizePenaltyShootout(match: FifaCalendarMatch) {
@@ -373,6 +461,7 @@ function buildMatchPayload(match: FifaCalendarMatch, timeline?: FifaTimelineResp
   const groupId = stage === "小组赛" ? groupName.replace(/^Group\s+/i, "").trim().toUpperCase() || "A" : "KO";
   const venue = getDescription(match.Stadium?.Name) || getDescription(match.Stadium?.CityName) || "待定球场";
   const goals = normalizeGoalEvents(match, timeline);
+  const redCards = normalizeRedCardEvents(match, timeline);
 
   return {
     awayLabel: awayTeamId ? undefined : match.Away?.ShortClubName || getDescription(match.Away?.TeamName) || match.PlaceHolderB,
@@ -389,6 +478,7 @@ function buildMatchPayload(match: FifaCalendarMatch, timeline?: FifaTimelineResp
         ? "进球事件来自 FIFA 官方 timelines。"
         : "基础赛程、赛果、排名来自 FIFA 官方 API。",
     penaltyShootout: normalizePenaltyShootout(match),
+    redCards,
     score,
     stage,
     status,

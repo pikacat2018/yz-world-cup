@@ -35,7 +35,7 @@ type WorldCupSnapshot = {
 };
 
 const WORLD_CUP_API_URL = "/api/world-cup";
-const WORLD_CUP_STORAGE_KEY = "yz-world-cup-live-snapshot-v3";
+const WORLD_CUP_STORAGE_KEY = "yz-world-cup-live-snapshot-v4";
 const WORLD_CUP_UPDATED_EVENT = "yz-world-cup-live-updated";
 const REQUEST_TTL_MS = 5 * 60 * 1000;
 
