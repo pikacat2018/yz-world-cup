@@ -34,12 +34,23 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
         const beijingTime = getBeijingDateTime(match);
         const hasRecord = Boolean(getMatchRecordBadge(recordByMatchId.get(match.id)));
         const scorerCounts = new Map<string, number>();
+        const totalGoalsByScorer = new Map<string, number>();
+
+        for (const goal of match.goals ?? []) {
+          const scorerKey = `${goal.side}:${goal.player}`;
+          totalGoalsByScorer.set(scorerKey, (totalGoalsByScorer.get(scorerKey) ?? 0) + 1);
+        }
+
         const goals = (match.goals ?? []).map((goal) => {
           const scorerKey = `${goal.side}:${goal.player}`;
           const count = (scorerCounts.get(scorerKey) ?? 0) + 1;
           scorerCounts.set(scorerKey, count);
 
-          return { ...goal, count };
+          return {
+            ...goal,
+            count,
+            isLastForScorer: count === (totalGoalsByScorer.get(scorerKey) ?? 0),
+          };
         });
 
         return (
@@ -72,9 +83,9 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
                   <div className={`impact-goal-event ${goal.side}`} key={`${goal.minute}-${goal.player}-${index}`}>
                     <span className="impact-goal-player">
                       {goal.side === "home" && goal.ownGoal ? <em>OG</em> : null}
-                      {goal.side === "home" && !goal.ownGoal && goal.count > 1 ? <em>{goal.count}x</em> : null}
+                      {goal.side === "home" && !goal.ownGoal && goal.count > 1 && goal.isLastForScorer ? <em>x{goal.count}</em> : null}
                       <span>{goal.player}</span>
-                      {goal.side === "away" && !goal.ownGoal && goal.count > 1 ? <em>x{goal.count}</em> : null}
+                      {goal.side === "away" && !goal.ownGoal && goal.count > 1 && goal.isLastForScorer ? <em>x{goal.count}</em> : null}
                       {goal.side === "away" && goal.ownGoal ? <em>OG</em> : null}
                     </span>
                     <span className="impact-goal-minute">{goal.minute}</span>

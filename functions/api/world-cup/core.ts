@@ -303,12 +303,22 @@ function normalizeGoalEvents(match: FifaCalendarMatch, timeline?: FifaTimelineRe
   const events = Array.isArray(timeline?.Event) ? timeline.Event : [];
   const homeTeamId = match.Home?.IdTeam;
   const awayTeamId = match.Away?.IdTeam;
+  let lastHomeGoals = 0;
+  let lastAwayGoals = 0;
 
   return events
     .filter((event) => {
       const label = getDescription(event.TypeLocalized).toLowerCase();
       const description = getDescription(event.EventDescription).toLowerCase();
+      const homeGoals = typeof event.HomeGoals === "number" ? event.HomeGoals : lastHomeGoals;
+      const awayGoals = typeof event.AwayGoals === "number" ? event.AwayGoals : lastAwayGoals;
+      const scoreChanged = homeGoals !== lastHomeGoals || awayGoals !== lastAwayGoals;
+
+      lastHomeGoals = homeGoals;
+      lastAwayGoals = awayGoals;
+
       if (description.includes("disallowed")) return false;
+      if (!scoreChanged) return false;
       return label.includes("goal");
     })
     .map((event) => {
