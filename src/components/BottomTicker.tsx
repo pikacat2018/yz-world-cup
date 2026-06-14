@@ -1,5 +1,5 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
-import { readPinnedNewsIds, readStoredNewsItems } from "../news/newsStore";
+import { NEWS_ITEMS_UPDATED_EVENT, readPinnedNewsIds, readStoredNewsItems } from "../news/newsStore";
 import { BOTTOM_TICKER_UPDATED_EVENT, composeBottomTickerItems, tickerSourceLabels } from "../news/ticker";
 import type { TickerItem } from "../news/types";
 
@@ -60,10 +60,12 @@ export default function BottomTicker() {
     const refreshTicker = () => setItems(loadTickerItems());
 
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
+    window.addEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshTicker);
     window.addEventListener("storage", refreshTicker);
 
     return () => {
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
+      window.removeEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshTicker);
       window.removeEventListener("storage", refreshTicker);
     };
   }, []);

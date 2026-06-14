@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { safeRemoveLocalStorage, safeSetLocalStorage } from "./safeStorage";
 
 type ActiveTabRecord = {
   id: string;
@@ -30,7 +31,7 @@ const readActiveTabRecord = (): ActiveTabRecord | null => {
 };
 
 const writeActiveTabRecord = (id: string) => {
-  window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, JSON.stringify({ id, updatedAt: Date.now() }));
+  safeSetLocalStorage(ACTIVE_TAB_STORAGE_KEY, JSON.stringify({ id, updatedAt: Date.now() }));
 };
 
 const isRecordExpired = (record: ActiveTabRecord | null) => !record || Date.now() - record.updatedAt > HEARTBEAT_TIMEOUT_MS;
@@ -42,7 +43,7 @@ export function useSingleActiveTab() {
 
   const releaseIfOwner = useCallback(() => {
     const current = readActiveTabRecord();
-    if (current?.id === tabIdRef.current) window.localStorage.removeItem(ACTIVE_TAB_STORAGE_KEY);
+    if (current?.id === tabIdRef.current) safeRemoveLocalStorage(ACTIVE_TAB_STORAGE_KEY);
   }, []);
 
   const claimActive = useCallback(() => {

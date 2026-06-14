@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { safeSetLocalStorage } from "../shared/safeStorage";
 import {
   allMatches as fallbackMatches,
   groups as fallbackGroups,
@@ -88,13 +89,11 @@ function readCachedSnapshot(): WorldCupSnapshot | null {
 
 function saveCachedSnapshot(snapshot: WorldCupSnapshot) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
-    WORLD_CUP_STORAGE_KEY,
-    JSON.stringify({
-      ...snapshot,
-      cachedAt: new Date().toISOString(),
-    }),
-  );
+  const cachedSnapshot = JSON.stringify({
+    ...snapshot,
+    cachedAt: new Date().toISOString(),
+  });
+  safeSetLocalStorage(WORLD_CUP_STORAGE_KEY, cachedSnapshot);
 }
 
 function normalizePayload(payload: WorldCupApiPayload): WorldCupSnapshot {

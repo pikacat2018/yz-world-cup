@@ -17,6 +17,7 @@ import {
   fetchLatestRedditHotNews,
   markRedditHotSeen,
   mergeManualRedditHotItems,
+  NEWS_ITEMS_UPDATED_EVENT,
   readPinnedNewsDates,
   readStoredNewsItems,
   saveNewsItems,
@@ -223,11 +224,13 @@ export default function EditorDesk() {
   useEffect(() => {
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshSelection);
     window.addEventListener(FOLLOW_UP_UPDATED_EVENT, refreshSelection);
+    window.addEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshSelection);
     window.addEventListener("storage", refreshSelection);
 
     return () => {
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshSelection);
       window.removeEventListener(FOLLOW_UP_UPDATED_EVENT, refreshSelection);
+      window.removeEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshSelection);
       window.removeEventListener("storage", refreshSelection);
     };
   }, [refreshSelection]);

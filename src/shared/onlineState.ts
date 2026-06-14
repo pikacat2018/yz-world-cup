@@ -1,3 +1,5 @@
+import { safeRemoveLocalStorage, safeSetLocalStorage } from "./safeStorage";
+
 export type SharedStateKey =
   | "news_items"
   | "pinned_news_ids"
@@ -62,11 +64,11 @@ export function getEditorAccessCode() {
 }
 
 export function saveEditorAccessCode(code: string) {
-  window.localStorage.setItem(ACCESS_CODE_STORAGE_KEY, code.trim());
+  safeSetLocalStorage(ACCESS_CODE_STORAGE_KEY, code.trim());
 }
 
 export function clearEditorAccessCode() {
-  window.localStorage.removeItem(ACCESS_CODE_STORAGE_KEY);
+  safeRemoveLocalStorage(ACCESS_CODE_STORAGE_KEY);
   hasHydratedSharedState = false;
   remoteUpdatedAt.clear();
 }
@@ -135,8 +137,7 @@ function applyDocument(document: SharedStateDocument) {
   if (!storageKey || (knownUpdatedAt && knownUpdatedAt >= document.updatedAt)) return false;
 
   remoteUpdatedAt.set(document.key, document.updatedAt);
-  window.localStorage.setItem(storageKey, JSON.stringify(document.value));
-  return true;
+  return safeSetLocalStorage(storageKey, JSON.stringify(document.value));
 }
 
 function readLocalSharedValue(key: SharedStateKey) {

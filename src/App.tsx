@@ -5,6 +5,7 @@ import EditorAccessGate from "./components/EditorAccessGate";
 import Layout from "./components/Layout";
 import { type AppTheme, isAppTheme, THEME_STORAGE_KEY } from "./components/ThemeToggle";
 import { useWorldCupData } from "./matches/worldCupDataStore";
+import { safeSetLocalStorage } from "./shared/safeStorage";
 import { useSingleActiveTab } from "./shared/singleActiveTab";
 
 function PassiveWorkspaceNotice({ onRetry, status }: { onRetry: () => void; status: "checking" | "passive" }) {
@@ -87,7 +88,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    safeSetLocalStorage(THEME_STORAGE_KEY, theme);
   }, [theme]);
 
   if (routePath === "/all-groups") {

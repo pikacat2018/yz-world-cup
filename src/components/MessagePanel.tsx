@@ -6,6 +6,7 @@ import {
   markRedditHotSeen,
   markNewsIdRead,
   mergeNewsItems,
+  NEWS_ITEMS_UPDATED_EVENT,
   NEWS_FEED_CONFIG,
   readReadNewsIds,
   readUnreadNewsIds,
@@ -142,10 +143,12 @@ export default function MessagePanel() {
     };
 
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshStoredItems);
+    window.addEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshStoredItems);
     window.addEventListener("storage", refreshStoredItems);
 
     return () => {
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshStoredItems);
+      window.removeEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshStoredItems);
       window.removeEventListener("storage", refreshStoredItems);
     };
   }, []);

@@ -2,6 +2,7 @@ import { extractRedditPostId, fetchRedditNews } from "./adapters/redditAdapter";
 import { fetchXNews } from "./adapters/xAdapter";
 import { fetchZhibo8News } from "./adapters/zhibo8Adapter";
 import { isApplyingSharedState, queueSharedStateSave } from "../shared/onlineState";
+import { safeRemoveLocalStorage, safeSetLocalStorage } from "../shared/safeStorage";
 import type { NewsFeedState, NewsItem } from "./types";
 
 export const PINNED_NEWS_STORAGE_KEY = "yz-world-cup-pinned-news";
@@ -10,11 +11,14 @@ export const READ_NEWS_STORAGE_KEY = "yz-world-cup-read-news";
 export const UNREAD_NEWS_STORAGE_KEY = "yz-world-cup-unread-news";
 export const NEWS_ITEMS_STORAGE_KEY = "yz-world-cup-news-items-v7";
 export const REDDIT_HOT_SEEN_STORAGE_KEY = "yz-world-cup-reddit-hot-seen-v1";
+export const NEWS_ITEMS_UPDATED_EVENT = "yz-world-cup-news-items-updated";
 export const NEWS_FEED_CONFIG = {
   initialVisibleCount: 40,
   loadMoreCount: 20,
-  maxStoredItems: 10_000,
+  maxStoredItems: 1800,
 };
+const MAX_NEWS_STATE_IDS = 3_000;
+const MIN_NEWS_ITEMS_ON_QUOTA_RETRY = 400;
 export const SOURCE_REFRESH_CONFIG = {
   zhibo8: 90_000,
   redditNew: 120_000,
@@ -26,8 +30,73 @@ const SOURCE_FETCH_TIMEOUT_MS = {
   reddit: 15_000,
 };
 const PINNED_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const NEWS_DB_NAME = "yz-world-cup-news-db";
+const NEWS_DB_VERSION = 1;
+const NEWS_STORE_NAME = "cache";
+const NEWS_ITEMS_RECORD_KEY = "news_items";
+const NEWS_ITEMS_SYNC_SIGNAL_KEY = "yz-world-cup-news-items-sync";
+
+let cachedNewsItems: NewsItem[] = [];
+let newsItemsHydrated = false;
+let newsItemsHydrationPromise: Promise<NewsItem[]> | null = null;
+let newsItemsCacheVersion = 0;
 
 const pad = (value: number) => String(value).padStart(2, "0");
+
+function notifyStoredNewsItemsUpdated() {
+  window.dispatchEvent(new Event(NEWS_ITEMS_UPDATED_EVENT));
+}
+
+function writeNewsSyncSignal() {
+  safeSetLocalStorage(NEWS_ITEMS_SYNC_SIGNAL_KEY, String(Date.now()));
+}
+
+function openNewsDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(NEWS_DB_NAME, NEWS_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(NEWS_STORE_NAME)) {
+        database.createObjectStore(NEWS_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("indexeddb_open_failed"));
+  });
+}
+
+function readNewsItemsFromIndexedDb(): Promise<unknown> {
+  return openNewsDb().then(
+    (database) =>
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(NEWS_STORE_NAME, "readonly");
+        const store = transaction.objectStore(NEWS_STORE_NAME);
+        const request = store.get(NEWS_ITEMS_RECORD_KEY);
+        request.onsuccess = () => resolve(request.result ?? []);
+        request.onerror = () => reject(request.error ?? new Error("indexeddb_read_failed"));
+        transaction.oncomplete = () => database.close();
+        transaction.onerror = () => reject(transaction.error ?? new Error("indexeddb_read_tx_failed"));
+      }),
+  );
+}
+
+function writeNewsItemsToIndexedDb(items: NewsItem[]) {
+  return openNewsDb().then(
+    (database) =>
+      new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction(NEWS_STORE_NAME, "readwrite");
+        const store = transaction.objectStore(NEWS_STORE_NAME);
+        const request = store.put(items, NEWS_ITEMS_RECORD_KEY);
+        request.onsuccess = () => undefined;
+        request.onerror = () => reject(request.error ?? new Error("indexeddb_write_failed"));
+        transaction.oncomplete = () => {
+          database.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error ?? new Error("indexeddb_write_tx_failed"));
+      }),
+  );
+}
 
 export function getLocalNewsDateKey(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -209,8 +278,8 @@ const readIdList = (key: string, limit?: number): string[] => {
 
 const saveIdList = (key: string, ids: string[], limit?: number) => {
   const uniqueIds = Array.from(new Set(ids));
-
-  window.localStorage.setItem(key, JSON.stringify(typeof limit === "number" ? uniqueIds.slice(0, limit) : uniqueIds));
+  const nextIds = typeof limit === "number" ? uniqueIds.slice(0, limit) : uniqueIds;
+  safeSetLocalStorage(key, JSON.stringify(nextIds));
 };
 
 export function readPinnedNewsIds(): string[] {
@@ -220,7 +289,7 @@ export function readPinnedNewsIds(): string[] {
 export function savePinnedNewsIds(ids: string[]) {
   const nextIds = Array.from(new Set(ids));
 
-  saveIdList(PINNED_NEWS_STORAGE_KEY, nextIds);
+  saveIdList(PINNED_NEWS_STORAGE_KEY, nextIds, MAX_NEWS_STATE_IDS);
   if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_ids", nextIds);
 }
 
@@ -250,7 +319,7 @@ export function savePinnedNewsDates(dates: Record<string, string>) {
     ),
   );
 
-  window.localStorage.setItem(PINNED_NEWS_DATES_STORAGE_KEY, JSON.stringify(nextDates));
+  safeSetLocalStorage(PINNED_NEWS_DATES_STORAGE_KEY, JSON.stringify(nextDates));
   if (!isApplyingSharedState()) queueSharedStateSave("pinned_news_dates", nextDates);
 }
 
@@ -272,7 +341,7 @@ export function readReadNewsIds(): string[] {
 export function saveReadNewsIds(ids: string[]) {
   const nextIds = Array.from(new Set(ids));
 
-  saveIdList(READ_NEWS_STORAGE_KEY, nextIds);
+  saveIdList(READ_NEWS_STORAGE_KEY, nextIds, MAX_NEWS_STATE_IDS);
   if (!isApplyingSharedState()) queueSharedStateSave("read_news_ids", nextIds);
 }
 
@@ -283,7 +352,7 @@ export function readUnreadNewsIds(): string[] {
 export function saveUnreadNewsIds(ids: string[]) {
   const nextIds = Array.from(new Set(ids));
 
-  saveIdList(UNREAD_NEWS_STORAGE_KEY, nextIds);
+  saveIdList(UNREAD_NEWS_STORAGE_KEY, nextIds, MAX_NEWS_STATE_IDS);
   if (!isApplyingSharedState()) queueSharedStateSave("unread_news_ids", nextIds);
 }
 
@@ -294,8 +363,111 @@ export function readRedditHotSeenKeys(): string[] {
 export function saveRedditHotSeenKeys(keys: string[]) {
   const nextKeys = Array.from(new Set(keys));
 
-  saveIdList(REDDIT_HOT_SEEN_STORAGE_KEY, nextKeys);
+  saveIdList(REDDIT_HOT_SEEN_STORAGE_KEY, nextKeys, MAX_NEWS_STATE_IDS);
   if (!isApplyingSharedState()) queueSharedStateSave("reddit_hot_seen_keys", nextKeys);
+}
+
+function pruneAssociatedNewsState(items: NewsItem[]) {
+  const validIds = new Set(items.map((item) => item.id));
+  const nextPinnedIds = readPinnedNewsIds().filter((id) => validIds.has(id)).slice(0, MAX_NEWS_STATE_IDS);
+  const nextReadIds = readReadNewsIds().filter((id) => validIds.has(id)).slice(0, MAX_NEWS_STATE_IDS);
+  const nextUnreadIds = readUnreadNewsIds().filter((id) => validIds.has(id)).slice(0, MAX_NEWS_STATE_IDS);
+  const nextPinnedDates = Object.fromEntries(
+    Object.entries(readPinnedNewsDates()).filter(([id]) => validIds.has(id)),
+  );
+
+  saveIdList(PINNED_NEWS_STORAGE_KEY, nextPinnedIds, MAX_NEWS_STATE_IDS);
+  saveIdList(READ_NEWS_STORAGE_KEY, nextReadIds, MAX_NEWS_STATE_IDS);
+  saveIdList(UNREAD_NEWS_STORAGE_KEY, nextUnreadIds, MAX_NEWS_STATE_IDS);
+  safeSetLocalStorage(PINNED_NEWS_DATES_STORAGE_KEY, JSON.stringify(nextPinnedDates));
+}
+
+function buildReducedNewsPayload(items: NewsItem[], targetCount: number) {
+  return JSON.stringify(
+    items.slice(0, targetCount).map((item) => ({
+      id: item.id,
+      source: item.source,
+      sourceVariant: item.sourceVariant,
+      title: item.title,
+      translatedTitle: item.translatedTitle,
+      url: item.url,
+      externalUrl: item.externalUrl,
+      publishedAt: item.publishedAt,
+      fetchedAt: item.fetchedAt,
+      pinned: item.pinned,
+      rawCategory: item.rawCategory,
+      isNew: item.isNew,
+      isRead: item.isRead,
+      feedSection: item.feedSection,
+      sourcePinned: item.sourcePinned,
+      score: item.score,
+      comments: item.comments,
+      priority: item.priority,
+    })),
+  );
+}
+
+function buildStoredNewsPayload(items: NewsItem[]) {
+  return buildReducedNewsPayload(items, items.length);
+}
+
+function parseStoredNewsItems(value: unknown): NewsItem[] {
+  const redditHotSeenKeys = new Set(readRedditHotSeenKeys());
+  const pinnedSet = new Set(readPinnedNewsIds());
+  if (!Array.isArray(value)) return [];
+
+  return dedupeNewsItems(value.filter(isNewsItem).filter((item) => !isRetiredMockNewsItem(item))).map((item) =>
+    isRedditHotItem(item) && redditHotSeenKeys.has(getDedupeKey(item)) && !pinnedSet.has(item.id)
+      ? { ...item, pinned: false, sourcePinned: false }
+      : item,
+  );
+}
+
+function readLegacyStoredNewsItems(): NewsItem[] {
+  try {
+    const raw = window.localStorage.getItem(NEWS_ITEMS_STORAGE_KEY);
+    return parseStoredNewsItems(raw ? JSON.parse(raw) : []);
+  } catch {
+    return [];
+  }
+}
+
+function syncCachedNewsItems(items: NewsItem[], options?: { broadcast?: boolean }) {
+  cachedNewsItems = items;
+  newsItemsHydrated = true;
+  newsItemsCacheVersion += 1;
+  if (options?.broadcast !== false) notifyStoredNewsItemsUpdated();
+}
+
+export function hydrateStoredNewsItems(force = false): Promise<NewsItem[]> {
+  if (typeof window === "undefined") return Promise.resolve(cachedNewsItems);
+  if (!force && newsItemsHydrated) return Promise.resolve(cachedNewsItems);
+  if (!force && newsItemsHydrationPromise) return newsItemsHydrationPromise;
+  const hydrationStartVersion = newsItemsCacheVersion;
+
+  newsItemsHydrationPromise = readNewsItemsFromIndexedDb()
+    .then((value) => {
+      let nextItems = parseStoredNewsItems(value);
+      if (nextItems.length === 0) {
+        nextItems = readLegacyStoredNewsItems();
+        if (nextItems.length > 0) void writeNewsItemsToIndexedDb(nextItems).catch((error) => console.warn("[news] indexeddb migrate failed", error));
+      }
+      if (newsItemsCacheVersion !== hydrationStartVersion) return cachedNewsItems;
+      syncCachedNewsItems(nextItems);
+      return nextItems;
+    })
+    .catch((error) => {
+      console.warn("[news] indexeddb hydrate failed", error);
+      const nextItems = readLegacyStoredNewsItems();
+      if (newsItemsCacheVersion !== hydrationStartVersion) return cachedNewsItems;
+      syncCachedNewsItems(nextItems);
+      return nextItems;
+    })
+    .finally(() => {
+      newsItemsHydrationPromise = null;
+    });
+
+  return newsItemsHydrationPromise;
 }
 
 export function markRedditHotSeen(item: NewsItem) {
@@ -308,22 +480,7 @@ export function markRedditHotSeen(item: NewsItem) {
 }
 
 export function readStoredNewsItems(): NewsItem[] {
-  try {
-    const raw = window.localStorage.getItem(NEWS_ITEMS_STORAGE_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : [];
-    const redditHotSeenKeys = new Set(readRedditHotSeenKeys());
-    const pinnedSet = new Set(readPinnedNewsIds());
-
-    if (!Array.isArray(parsed)) return [];
-
-    return dedupeNewsItems(parsed.filter(isNewsItem).filter((item) => !isRetiredMockNewsItem(item))).map((item) =>
-      isRedditHotItem(item) && redditHotSeenKeys.has(getDedupeKey(item)) && !pinnedSet.has(item.id)
-        ? { ...item, pinned: false, sourcePinned: false }
-        : item,
-    );
-  } catch {
-    return [];
-  }
+  return cachedNewsItems;
 }
 
 export function reconcileRedditHotSeenState(): NewsItem[] {
@@ -348,8 +505,24 @@ export function reconcileRedditHotSeenState(): NewsItem[] {
 
 export function saveNewsItems(items: NewsItem[]) {
   const nextItems = limitNewsItems(items);
-
-  window.localStorage.setItem(NEWS_ITEMS_STORAGE_KEY, JSON.stringify(nextItems));
+  pruneAssociatedNewsState(nextItems);
+  let storedItems = nextItems;
+  let writePayload = buildStoredNewsPayload(nextItems);
+  if (writePayload.length > 4_500_000) {
+    const reducedItems = nextItems.slice(0, MIN_NEWS_ITEMS_ON_QUOTA_RETRY);
+    pruneAssociatedNewsState(reducedItems);
+    storedItems = reducedItems;
+    writePayload = buildReducedNewsPayload(reducedItems, reducedItems.length);
+  }
+  syncCachedNewsItems(storedItems);
+  void writeNewsItemsToIndexedDb(JSON.parse(writePayload) as NewsItem[])
+    .then(() => {
+      safeRemoveLocalStorage(NEWS_ITEMS_STORAGE_KEY);
+      writeNewsSyncSignal();
+    })
+    .catch((error) => {
+      console.warn("[news] indexeddb write failed", error);
+    });
   if (!isApplyingSharedState()) queueSharedStateSave("news_items", nextItems);
 }
 
@@ -631,4 +804,14 @@ export async function loadNewsFeed(): Promise<NewsFeedState> {
     usingMock: false,
     errors,
   };
+}
+
+if (typeof window !== "undefined") {
+  cachedNewsItems = readLegacyStoredNewsItems();
+  void hydrateStoredNewsItems();
+  window.addEventListener("storage", (event) => {
+    if (event.key === NEWS_ITEMS_SYNC_SIGNAL_KEY) {
+      void hydrateStoredNewsItems(true);
+    }
+  });
 }

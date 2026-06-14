@@ -2,7 +2,7 @@ import { type CSSProperties, type Ref, useEffect, useMemo, useRef, useState } fr
 import { getTeam, type Match } from "../data/mockWorldCup";
 import { readWorldCupSnapshot, useWorldCupData, WORLD_CUP_UPDATED_EVENT } from "../matches/worldCupDataStore";
 import { FOLLOW_UP_UPDATED_EVENT, getLocalDateKey, readFollowUpItems, type FollowUpItem } from "../news/followUpStore";
-import { readStoredNewsItems } from "../news/newsStore";
+import { NEWS_ITEMS_UPDATED_EVENT, readStoredNewsItems } from "../news/newsStore";
 import { BOTTOM_TICKER_UPDATED_EVENT } from "../news/ticker";
 import type { AppTheme } from "./ThemeToggle";
 import ThemeToggle from "./ThemeToggle";
@@ -90,6 +90,7 @@ export default function TopTickerPlaceholder({
     window.addEventListener(WORLD_CUP_UPDATED_EVENT, refreshTicker);
     window.addEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
     window.addEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
+    window.addEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshTicker);
     window.addEventListener("storage", refreshTicker);
 
     const intervalId = window.setInterval(refreshTicker, 60_000);
@@ -98,6 +99,7 @@ export default function TopTickerPlaceholder({
       window.removeEventListener(WORLD_CUP_UPDATED_EVENT, refreshTicker);
       window.removeEventListener(BOTTOM_TICKER_UPDATED_EVENT, refreshTicker);
       window.removeEventListener(FOLLOW_UP_UPDATED_EVENT, refreshTicker);
+      window.removeEventListener(NEWS_ITEMS_UPDATED_EVENT, refreshTicker);
       window.removeEventListener("storage", refreshTicker);
       window.clearInterval(intervalId);
     };
