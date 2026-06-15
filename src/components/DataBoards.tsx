@@ -149,6 +149,7 @@ export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
       return scoredMatch ? [scoredMatch] : [];
     });
     const { scorers, topSingleMatch, topSingleMatchTieCount } = aggregateScorers(allMatches);
+    const topSingleMatchScore = topSingleMatch ? parseScoredMatch(topSingleMatch.match) : undefined;
     const topScorer = scorers[0];
     const highestMarginMatch = pickMaxBy(scoredMatches, ({ homeGoals, awayGoals }) => Math.abs(homeGoals - awayGoals));
     const highestScoringMatch = pickMaxBy(scoredMatches, ({ homeGoals, awayGoals }) => homeGoals + awayGoals);
@@ -183,7 +184,9 @@ export default function DataBoards({ onSelectGroup }: DataBoardsProps) {
         key: "overview-single-match-goal",
         label: "单场进球",
         meta: topSingleMatch
-          ? `${formatMatchLabel(parseScoredMatch(topSingleMatch.match)!)}${formatTieSuffix(topSingleMatchTieCount)}`
+          ? topSingleMatchScore
+            ? `${formatMatchLabel(topSingleMatchScore)}${formatTieSuffix(topSingleMatchTieCount)}`
+            : "比分待补全"
           : "--",
         name: topSingleMatch ? `${topSingleMatch.player} | ${topSingleMatch.teamLabel}` : "等待 FIFA 事件增强",
         value: topSingleMatch ? `${topSingleMatch.goals} 球` : "--",

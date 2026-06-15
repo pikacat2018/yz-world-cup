@@ -1,10 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getTeam, type Match } from "../data/mockWorldCup";
 import { useWorldCupData } from "../matches/worldCupDataStore";
 import { getBeijingDateTime } from "../utils/matchTime";
 import TeamName from "./TeamName";
-
-const DEFAULT_QUEUE_SIZE = 6;
 
 const splitScore = (score?: string) => {
   if (!score) return undefined;
@@ -22,6 +20,25 @@ const getStageLabel = (match: Match) => {
   return match.stage;
 };
 
+const getBeijingToday = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+  }).formatToParts(new Date());
+
+  const dateParts = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+};
+
+const getDefaultScheduleDate = (matchDates: string[]) => {
+  if (matchDates.length === 0) return "";
+
+  const today = getBeijingToday();
+  return matchDates.find((date) => date >= today) ?? matchDates[matchDates.length - 1];
+};
+
 type SchedulePanelProps = {
   onSelectMatch: (match: Match) => void;
 };
@@ -29,14 +46,22 @@ type SchedulePanelProps = {
 export default function SchedulePanel({ onSelectMatch }: SchedulePanelProps) {
   const { allMatches } = useWorldCupData();
   const matchDates = useMemo(
-    () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).date))),
+    () => Array.from(new Set(allMatches.map((match) => getBeijingDateTime(match).date))).sort(),
     [allMatches],
   );
-  const [selectedDate, setSelectedDate] = useState(matchDates[0] ?? "");
+  const [selectedDate, setSelectedDate] = useState(() => getDefaultScheduleDate(matchDates));
+
+  useEffect(() => {
+    if (matchDates.length === 0) {
+      setSelectedDate("");
+      return;
+    }
+
+    setSelectedDate((currentDate) => (matchDates.includes(currentDate) ? currentDate : getDefaultScheduleDate(matchDates)));
+  }, [matchDates]);
+
   const activeDateIndex = matchDates.indexOf(selectedDate);
-  const queuedMatches = allMatches
-    .filter((match) => getBeijingDateTime(match).date >= selectedDate)
-    .slice(0, DEFAULT_QUEUE_SIZE);
+  const queuedMatches = allMatches.filter((match) => getBeijingDateTime(match).date === selectedDate);
 
   const openFullSchedule = () => {
     window.open("/schedule", "_blank", "noopener,noreferrer");
