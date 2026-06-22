@@ -47,7 +47,11 @@ const localStorageKeys: Record<SharedStateKey, string> = {
   follow_up_items: "yz-world-cup-follow-up-items-v1",
 };
 
-const refreshEvents = ["yz-world-cup-bottom-ticker-updated", "yz-world-cup-follow-up-updated"];
+const refreshEvents = [
+  "yz-world-cup-bottom-ticker-updated",
+  "yz-world-cup-follow-up-updated",
+  "yz-world-cup-news-items-updated",
+];
 const remoteUpdatedAt = new Map<SharedStateKey, string>();
 const pushTimers = new Map<SharedStateKey, number>();
 let applyingRemoteState = false;

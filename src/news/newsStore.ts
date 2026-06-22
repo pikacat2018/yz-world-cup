@@ -15,10 +15,11 @@ export const NEWS_ITEMS_UPDATED_EVENT = "yz-world-cup-news-items-updated";
 export const NEWS_FEED_CONFIG = {
   initialVisibleCount: 40,
   loadMoreCount: 20,
-  maxStoredItems: 1800,
+  maxStoredItems: 5000,
 };
 const MAX_NEWS_STATE_IDS = 3_000;
 const MIN_NEWS_ITEMS_ON_QUOTA_RETRY = 400;
+const SHARED_STATE_NEWS_ITEMS_LIMIT = 1200;
 export const SOURCE_REFRESH_CONFIG = {
   zhibo8: 90_000,
   redditNew: 120_000,
@@ -382,9 +383,8 @@ function pruneAssociatedNewsState(items: NewsItem[]) {
   safeSetLocalStorage(PINNED_NEWS_DATES_STORAGE_KEY, JSON.stringify(nextPinnedDates));
 }
 
-function buildReducedNewsPayload(items: NewsItem[], targetCount: number) {
-  return JSON.stringify(
-    items.slice(0, targetCount).map((item) => ({
+function buildReducedNewsItems(items: NewsItem[], targetCount: number) {
+  return items.slice(0, targetCount).map((item) => ({
       id: item.id,
       source: item.source,
       sourceVariant: item.sourceVariant,
@@ -403,12 +403,19 @@ function buildReducedNewsPayload(items: NewsItem[], targetCount: number) {
       score: item.score,
       comments: item.comments,
       priority: item.priority,
-    })),
-  );
+    }));
+}
+
+function buildReducedNewsPayload(items: NewsItem[], targetCount: number) {
+  return JSON.stringify(buildReducedNewsItems(items, targetCount));
 }
 
 function buildStoredNewsPayload(items: NewsItem[]) {
   return buildReducedNewsPayload(items, items.length);
+}
+
+function buildSharedStateNewsItems(items: NewsItem[]) {
+  return buildReducedNewsItems(sortNewsItems(items), SHARED_STATE_NEWS_ITEMS_LIMIT);
 }
 
 function parseStoredNewsItems(value: unknown): NewsItem[] {
@@ -470,6 +477,23 @@ export function hydrateStoredNewsItems(force = false): Promise<NewsItem[]> {
   return newsItemsHydrationPromise;
 }
 
+function importLegacyStoredNewsItems(options?: { broadcast?: boolean }) {
+  const raw = window.localStorage.getItem(NEWS_ITEMS_STORAGE_KEY);
+  if (!raw) return Promise.resolve(cachedNewsItems);
+
+  const nextItems = readLegacyStoredNewsItems();
+  syncCachedNewsItems(nextItems, { broadcast: options?.broadcast });
+  return writeNewsItemsToIndexedDb(nextItems)
+    .then(() => {
+      safeRemoveLocalStorage(NEWS_ITEMS_STORAGE_KEY);
+      return nextItems;
+    })
+    .catch((error) => {
+      console.warn("[news] indexeddb legacy import failed", error);
+      return nextItems;
+    });
+}
+
 export function markRedditHotSeen(item: NewsItem) {
   const key = getRedditHotSeenKey(item);
   if (!key) return;
@@ -523,7 +547,7 @@ export function saveNewsItems(items: NewsItem[]) {
     .catch((error) => {
       console.warn("[news] indexeddb write failed", error);
     });
-  if (!isApplyingSharedState()) queueSharedStateSave("news_items", nextItems);
+  if (!isApplyingSharedState()) queueSharedStateSave("news_items", buildSharedStateNewsItems(nextItems));
 }
 
 export function markNewsIdRead(id: string) {
@@ -809,9 +833,16 @@ export async function loadNewsFeed(): Promise<NewsFeedState> {
 if (typeof window !== "undefined") {
   cachedNewsItems = readLegacyStoredNewsItems();
   void hydrateStoredNewsItems();
+  window.addEventListener(NEWS_ITEMS_UPDATED_EVENT, () => {
+    if (window.localStorage.getItem(NEWS_ITEMS_STORAGE_KEY)) {
+      void importLegacyStoredNewsItems({ broadcast: false });
+    }
+  });
   window.addEventListener("storage", (event) => {
     if (event.key === NEWS_ITEMS_SYNC_SIGNAL_KEY) {
       void hydrateStoredNewsItems(true);
+    } else if (event.key === NEWS_ITEMS_STORAGE_KEY && event.newValue) {
+      void importLegacyStoredNewsItems({ broadcast: true });
     }
   });
 }
