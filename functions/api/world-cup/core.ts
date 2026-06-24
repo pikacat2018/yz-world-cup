@@ -228,6 +228,8 @@ const PLAYER_SHORT_NAME_ALIASES: Record<string, Record<string, string>> = {
     RAUL: "JIMENEZ",
   },
 };
+const TIMELINE_LOOKBACK_HOURS = 18;
+const TIMELINE_MATCH_LIMIT = 12;
 
 const readEnvValue = (env: EnvLike, key: string) => {
   const value = env[key];
@@ -303,6 +305,14 @@ const formatUtcDate = (utcDate?: string) => {
   const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${map.year}-${map.month}-${map.day} ${map.hour}:${map.minute}`;
 };
+
+const getBeijingDateKey = (date: Date) =>
+  new Intl.DateTimeFormat("en-CA", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+  }).format(date);
 
 const extractGoalPlayerName = (description: string) => {
   const beforeBracket = description.split("(")[0]?.trim();
@@ -560,7 +570,27 @@ function buildGroups(matches: MatchPayload[], standingsByGroup: Map<string, Stan
 }
 
 async function fetchMatchTimelines(matches: FifaCalendarMatch[]) {
-  const matchesNeedingTimeline = matches.filter((match) => normalizeStatus(match.MatchStatus) !== "scheduled");
+  const now = Date.now();
+  const todayKey = getBeijingDateKey(new Date(now));
+  const lookbackMs = TIMELINE_LOOKBACK_HOURS * 60 * 60 * 1000;
+  const matchesNeedingTimeline = matches
+    .filter((match) => {
+      const status = normalizeStatus(match.MatchStatus);
+      if (status === "live") return true;
+      if (status === "scheduled") return false;
+
+      const utcDate = match.Date ? new Date(match.Date) : null;
+      if (!utcDate || Number.isNaN(utcDate.getTime())) return false;
+
+      if (getBeijingDateKey(utcDate) === todayKey) return true;
+      return now - utcDate.getTime() <= lookbackMs;
+    })
+    .sort((a, b) => {
+      const left = a.Date ? new Date(a.Date).getTime() : Number.MAX_SAFE_INTEGER;
+      const right = b.Date ? new Date(b.Date).getTime() : Number.MAX_SAFE_INTEGER;
+      return Math.abs(left - now) - Math.abs(right - now);
+    })
+    .slice(0, TIMELINE_MATCH_LIMIT);
   const timelineEntries = await Promise.all(
     matchesNeedingTimeline.map(async (match) => {
       const matchId = match.IdMatch;
