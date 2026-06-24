@@ -40,3 +40,25 @@ using (false)
 with check (false);
 
 grant select, insert, update, delete on table public.match_records to service_role;
+
+create table if not exists public.world_cup_match_events (
+  match_id text primary key,
+  match_no integer not null,
+  utc_date timestamptz,
+  goals jsonb,
+  red_cards jsonb,
+  penalty_shootout jsonb,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.world_cup_match_events enable row level security;
+
+drop policy if exists "world_cup_match_events_no_public_access" on public.world_cup_match_events;
+create policy "world_cup_match_events_no_public_access"
+on public.world_cup_match_events
+for all
+to anon, authenticated
+using (false)
+with check (false);
+
+grant select, insert, update, delete on table public.world_cup_match_events to service_role;

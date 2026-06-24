@@ -95,26 +95,26 @@ type FifaTimelineResponse = {
   Event?: FifaTimelineEvent[];
 };
 
-type MatchGoal = {
+export type MatchGoal = {
   minute: string;
   ownGoal?: boolean;
   player: string;
   side: "away" | "home";
 };
 
-type MatchRedCard = {
+export type MatchRedCard = {
   minute: string;
   player: string;
   side: "away" | "home";
 };
 
-type PenaltyShootout = {
+export type PenaltyShootout = {
   awayScore: number;
   homeScore: number;
   rounds: [];
 };
 
-type MatchPayload = {
+export type MatchPayload = {
   awayLabel?: string;
   awayTeamId?: string;
   date: string;
@@ -230,6 +230,7 @@ const PLAYER_SHORT_NAME_ALIASES: Record<string, Record<string, string>> = {
 };
 const TIMELINE_LOOKBACK_HOURS = 18;
 const TIMELINE_MATCH_LIMIT = 12;
+export const BACKFILL_BATCH_LIMIT = 6;
 
 const readEnvValue = (env: EnvLike, key: string) => {
   const value = env[key];
@@ -313,6 +314,18 @@ const getBeijingDateKey = (date: Date) =>
     timeZone: "Asia/Shanghai",
     year: "numeric",
   }).format(date);
+
+function shouldFetchTimelineForLiveWindow(match: FifaCalendarMatch, now = Date.now()) {
+  const status = normalizeStatus(match.MatchStatus);
+  if (status === "live") return true;
+  if (status === "scheduled") return false;
+
+  const utcDate = match.Date ? new Date(match.Date) : null;
+  if (!utcDate || Number.isNaN(utcDate.getTime())) return false;
+
+  if (getBeijingDateKey(utcDate) === getBeijingDateKey(new Date(now))) return true;
+  return now - utcDate.getTime() <= TIMELINE_LOOKBACK_HOURS * 60 * 60 * 1000;
+}
 
 const extractGoalPlayerName = (description: string) => {
   const beforeBracket = description.split("(")[0]?.trim();
@@ -571,20 +584,8 @@ function buildGroups(matches: MatchPayload[], standingsByGroup: Map<string, Stan
 
 async function fetchMatchTimelines(matches: FifaCalendarMatch[]) {
   const now = Date.now();
-  const todayKey = getBeijingDateKey(new Date(now));
-  const lookbackMs = TIMELINE_LOOKBACK_HOURS * 60 * 60 * 1000;
   const matchesNeedingTimeline = matches
-    .filter((match) => {
-      const status = normalizeStatus(match.MatchStatus);
-      if (status === "live") return true;
-      if (status === "scheduled") return false;
-
-      const utcDate = match.Date ? new Date(match.Date) : null;
-      if (!utcDate || Number.isNaN(utcDate.getTime())) return false;
-
-      if (getBeijingDateKey(utcDate) === todayKey) return true;
-      return now - utcDate.getTime() <= lookbackMs;
-    })
+    .filter((match) => shouldFetchTimelineForLiveWindow(match, now))
     .sort((a, b) => {
       const left = a.Date ? new Date(a.Date).getTime() : Number.MAX_SAFE_INTEGER;
       const right = b.Date ? new Date(b.Date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -603,18 +604,84 @@ async function fetchMatchTimelines(matches: FifaCalendarMatch[]) {
   return new Map(timelineEntries.filter((entry): entry is readonly [string, FifaTimelineResponse] => Boolean(entry)));
 }
 
+async function fetchMatchTimelinesForBatch(matches: FifaCalendarMatch[]) {
+  const timelineEntries = await Promise.all(
+    matches.map(async (match) => {
+      const matchId = match.IdMatch;
+      if (!matchId) return null;
+      const timeline = await fetchFifaJson<FifaTimelineResponse>(`/timelines/${matchId}?language=${DEFAULT_LANGUAGE}`);
+      return [matchId, timeline] as const;
+    }),
+  );
+
+  return new Map(timelineEntries.filter((entry): entry is readonly [string, FifaTimelineResponse] => Boolean(entry)));
+}
+
+async function fetchRawMatchesForSeason(seasonId: string) {
+  const matchesResponse = await fetchFifaJson<FifaCalendarMatchesResponse>(
+    `/calendar/matches?language=${DEFAULT_LANGUAGE}&count=${MATCH_FETCH_COUNT}&idSeason=${seasonId}`,
+  );
+  return Array.isArray(matchesResponse.Results) ? matchesResponse.Results : [];
+}
+
+export function mergeStoredEventsIntoMatches(
+  matches: MatchPayload[],
+  storedByMatchId: Map<string, { goals?: MatchGoal[]; penaltyShootout?: PenaltyShootout; redCards?: MatchRedCard[] }>,
+) {
+  return matches.map((match) => {
+    const stored = storedByMatchId.get(match.id);
+    if (!stored) return match;
+
+    return {
+      ...match,
+      goals: match.goals?.length ? match.goals : stored.goals,
+      penaltyShootout: match.penaltyShootout ?? stored.penaltyShootout,
+      redCards: match.redCards?.length ? match.redCards : stored.redCards,
+    };
+  });
+}
+
+export async function buildHistoricalEventBackfillBatch(env: EnvLike, knownMatchIds: Set<string>, requestedLimit = BACKFILL_BATCH_LIMIT) {
+  const seasonId = getSeasonId(env);
+  const rawMatches = await fetchRawMatchesForSeason(seasonId);
+  const candidates = rawMatches
+    .filter((match) => normalizeStatus(match.MatchStatus) === "finished")
+    .filter((match) => !shouldFetchTimelineForLiveWindow(match))
+    .filter((match) => {
+      const normalizedId = `fifa-${match.IdMatch ?? match.MatchNumber ?? ""}`;
+      return Boolean(match.IdMatch && normalizedId && !knownMatchIds.has(normalizedId));
+    })
+    .sort((a, b) => (a.MatchNumber ?? 0) - (b.MatchNumber ?? 0));
+  const limit = Math.max(1, Math.min(requestedLimit, BACKFILL_BATCH_LIMIT));
+  const selected = candidates.slice(0, limit);
+  const timelinesByMatchId = await fetchMatchTimelinesForBatch(selected);
+  const rows = selected.map((match) => {
+    const payload = buildMatchPayload(match, match.IdMatch ? timelinesByMatchId.get(match.IdMatch) : undefined);
+    return {
+      goals: payload.goals ?? null,
+      match_id: payload.id,
+      match_no: payload.matchNo,
+      penalty_shootout: payload.penaltyShootout ?? null,
+      red_cards: payload.redCards ?? null,
+      utc_date: payload.utcDate ?? null,
+    };
+  });
+
+  return {
+    remaining: Math.max(candidates.length - selected.length, 0),
+    rows,
+  };
+}
+
 export async function fetchWorldCupPayload(env: EnvLike): Promise<WorldCupApiPayload> {
   const competitionId = getCompetitionId(env);
   const seasonId = getSeasonId(env);
 
-  const [matchesResponse, stagesResponse] = await Promise.all([
-    fetchFifaJson<FifaCalendarMatchesResponse>(
-      `/calendar/matches?language=${DEFAULT_LANGUAGE}&count=${MATCH_FETCH_COUNT}&idSeason=${seasonId}`,
-    ),
+  const [rawMatches, stagesResponse] = await Promise.all([
+    fetchRawMatchesForSeason(seasonId),
     fetchFifaJson<FifaStagesResponse>(`/stages?idSeason=${seasonId}&language=${DEFAULT_LANGUAGE}`),
   ]);
 
-  const rawMatches = Array.isArray(matchesResponse.Results) ? matchesResponse.Results : [];
   const stages = Array.isArray(stagesResponse.Results) ? stagesResponse.Results : [];
   const firstStage =
     stages.find((stage) => stage.Type === 1) ?? stages.find((stage) => /first stage/i.test(getDescription(stage.Name)));

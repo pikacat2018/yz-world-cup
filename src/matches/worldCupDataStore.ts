@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getEditorAccessCode } from "../shared/onlineState";
 import { safeSetLocalStorage } from "../shared/safeStorage";
 import {
   allMatches as fallbackMatches,
@@ -36,10 +37,14 @@ type WorldCupSnapshot = {
 };
 
 const WORLD_CUP_API_URL = "/api/world-cup";
+const WORLD_CUP_BACKFILL_API_URL = "/api/world-cup/backfill";
 const WORLD_CUP_STORAGE_KEY = "yz-world-cup-live-snapshot-v4";
 const WORLD_CUP_EVENT_CACHE_KEY = "yz-world-cup-match-events-v1";
 const WORLD_CUP_UPDATED_EVENT = "yz-world-cup-live-updated";
 const REQUEST_TTL_MS = 5 * 60 * 1000;
+const BACKFILL_COOLDOWN_MS = 5 * 60 * 1000;
+const BACKFILL_BATCHES_PER_RUN = 3;
+const BACKFILL_BATCH_DELAY_MS = 1500;
 
 const fallbackSnapshot: WorldCupSnapshot = {
   allMatches: fallbackMatches,
@@ -53,6 +58,8 @@ const fallbackSnapshot: WorldCupSnapshot = {
 
 let currentSnapshot = readCachedSnapshot() ?? fallbackSnapshot;
 let currentRequest: Promise<void> | null = null;
+let backfillRequest: Promise<void> | null = null;
+let lastBackfillStartedAt = 0;
 const listeners = new Set<() => void>();
 
 function notifyListeners() {
@@ -183,6 +190,40 @@ async function fetchWorldCupSnapshot() {
   return normalizePayload((await response.json()) as WorldCupApiPayload, currentSnapshot);
 }
 
+const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+async function runWorldCupBackfillInBackground() {
+  if (typeof window === "undefined") return;
+  const accessCode = getEditorAccessCode();
+  if (!accessCode) return;
+
+  let totalProcessed = 0;
+  for (let attempt = 0; attempt < BACKFILL_BATCHES_PER_RUN; attempt += 1) {
+    const response = await fetch(`${WORLD_CUP_BACKFILL_API_URL}?limit=6`, {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Editor-Access-Code": accessCode,
+      },
+      method: "POST",
+    });
+    if (!response.ok) throw new Error(`world_cup_backfill_failed:${response.status}`);
+
+    const payload = (await response.json()) as { processed?: number; remaining?: number };
+    const processed = payload.processed ?? 0;
+    totalProcessed += processed;
+    if (processed === 0 || (payload.remaining ?? 0) === 0) break;
+    await wait(BACKFILL_BATCH_DELAY_MS);
+  }
+
+  if (totalProcessed > 0) {
+    const snapshot = await fetchWorldCupSnapshot();
+    currentSnapshot = snapshot;
+    saveCachedSnapshot(snapshot);
+    saveEventCache(snapshot.allMatches);
+    notifyListeners();
+  }
+}
+
 export function readWorldCupSnapshot() {
   return currentSnapshot;
 }
@@ -196,6 +237,20 @@ export async function hydrateWorldCupSnapshot(force = false) {
       saveCachedSnapshot(snapshot);
       saveEventCache(snapshot.allMatches);
       notifyListeners();
+      if (
+        typeof window !== "undefined" &&
+        !backfillRequest &&
+        Date.now() - lastBackfillStartedAt > BACKFILL_COOLDOWN_MS
+      ) {
+        lastBackfillStartedAt = Date.now();
+        backfillRequest = runWorldCupBackfillInBackground()
+          .catch((error) => {
+            console.warn("[world-cup] backfill failed", error);
+          })
+          .finally(() => {
+            backfillRequest = null;
+          });
+      }
     })
     .catch((error) => {
       console.warn("[world-cup] hydrate failed", error);
