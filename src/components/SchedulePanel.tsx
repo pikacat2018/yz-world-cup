@@ -63,6 +63,11 @@ export default function SchedulePanel({ onSelectMatch }: SchedulePanelProps) {
   const activeDateIndex = matchDates.indexOf(selectedDate);
   const queuedMatches = allMatches.filter((match) => getBeijingDateTime(match).date === selectedDate);
 
+  useEffect(() => {
+    if (queuedMatches.length === 0) return;
+    onSelectMatch(queuedMatches[0]);
+  }, [onSelectMatch, queuedMatches]);
+
   const openFullSchedule = () => {
     window.open("/schedule", "_blank", "noopener,noreferrer");
   };

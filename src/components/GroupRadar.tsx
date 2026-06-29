@@ -41,6 +41,26 @@ export default function GroupRadar({
     window.open("/all-groups", "_blank");
   };
 
+  if (!selectedGroup && !selectedStage) {
+    return (
+      <aside className="panel group-radar">
+        <div className="panel-title-row">
+          <div className="radar-title-tools">
+            <h2>比赛</h2>
+            <select className="knockout-stage-select" disabled value="">
+              <option value="">等待抓取数据</option>
+            </select>
+          </div>
+        </div>
+        <div className="radar-summary-card">
+          <div className="radar-match-list" aria-label="暂无比赛数据">
+            暂无抓取到的比赛数据
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="panel group-radar">
       <div className="panel-title-row">

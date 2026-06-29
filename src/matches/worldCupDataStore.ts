@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { getEditorAccessCode } from "../shared/onlineState";
 import { safeSetLocalStorage } from "../shared/safeStorage";
 import {
-  allMatches as fallbackMatches,
-  groups as fallbackGroups,
   teams as fallbackTeams,
   type Group,
   type Match,
@@ -46,17 +44,17 @@ const BACKFILL_COOLDOWN_MS = 5 * 60 * 1000;
 const BACKFILL_BATCHES_PER_RUN = 3;
 const BACKFILL_BATCH_DELAY_MS = 1500;
 
-const fallbackSnapshot: WorldCupSnapshot = {
-  allMatches: fallbackMatches,
+const emptySnapshot: WorldCupSnapshot = {
+  allMatches: [],
   eventEnhancementProvider: "fifa",
   eventEnhancementStatus: "ready",
-  groups: fallbackGroups,
-  isFallback: true,
-  source: "mock",
+  groups: [],
+  isFallback: false,
+  source: "unavailable",
   teams: fallbackTeams,
 };
 
-let currentSnapshot = readCachedSnapshot() ?? fallbackSnapshot;
+let currentSnapshot = readCachedSnapshot() ?? emptySnapshot;
 let currentRequest: Promise<void> | null = null;
 let backfillRequest: Promise<void> | null = null;
 let lastBackfillStartedAt = 0;
@@ -83,6 +81,10 @@ function readCachedSnapshot(): WorldCupSnapshot | null {
     const raw = window.localStorage.getItem(WORLD_CUP_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WorldCupSnapshot & { cachedAt?: string };
+    if (parsed.source === "mock") {
+      window.localStorage.removeItem(WORLD_CUP_STORAGE_KEY);
+      return null;
+    }
     if (!Array.isArray(parsed.allMatches) || !Array.isArray(parsed.groups) || !Array.isArray(parsed.teams)) {
       return null;
     }
