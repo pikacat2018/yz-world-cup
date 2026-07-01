@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import EntityTimelineDialog from "./EntityTimelineDialog";
 import EditorDesk from "./EditorDesk";
 import GroupRadar from "./GroupRadar";
 import MatchRecordCodeDialog from "./MatchRecordCodeDialog";
@@ -57,6 +58,7 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
   const [recordMatch, setRecordMatch] = useState<Match | undefined>();
   const [pendingRecordMatch, setPendingRecordMatch] = useState<Match | undefined>();
   const [isRecordCodeOpen, setIsRecordCodeOpen] = useState(false);
+  const [isEntityTimelineOpen, setIsEntityTimelineOpen] = useState(false);
   const [desktopColumnOrder, setDesktopColumnOrder] = useState<DesktopColumnId[]>(readDesktopColumnOrder);
   const [isColumnSettingsOpen, setIsColumnSettingsOpen] = useState(false);
 
@@ -153,10 +155,12 @@ export default function Layout({ onThemeChange, selectedGroupId, theme, onSelect
     <div className="app-shell">
       <TopTickerPlaceholder
         isColumnSettingsOpen={isColumnSettingsOpen}
+        onOpenEntityTimeline={() => setIsEntityTimelineOpen(true)}
         onThemeChange={onThemeChange}
         onToggleColumnSettings={() => setIsColumnSettingsOpen((open) => !open)}
         theme={theme}
       />
+      {isEntityTimelineOpen ? <EntityTimelineDialog onClose={() => setIsEntityTimelineOpen(false)} /> : null}
       <MatchRecordDialog match={recordMatch} onClose={() => setRecordMatch(undefined)} />
       {isRecordCodeOpen ? (
         <MatchRecordCodeDialog

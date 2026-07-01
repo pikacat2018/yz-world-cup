@@ -41,6 +41,25 @@ with check (false);
 
 grant select, insert, update, delete on table public.match_records to service_role;
 
+create table if not exists public.entity_timeline_records (
+  entity_id text primary key,
+  record_key text not null default 'shared',
+  record jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.entity_timeline_records enable row level security;
+
+drop policy if exists "entity_timeline_records_no_public_access" on public.entity_timeline_records;
+create policy "entity_timeline_records_no_public_access"
+on public.entity_timeline_records
+for all
+to anon, authenticated
+using (false)
+with check (false);
+
+grant select, insert, update, delete on table public.entity_timeline_records to service_role;
+
 create table if not exists public.world_cup_match_events (
   match_id text primary key,
   match_no integer not null,

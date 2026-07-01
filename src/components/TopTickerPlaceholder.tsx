@@ -67,6 +67,7 @@ const buildTopTickerItems = (matches: Match[]): TopTickerItem[] => {
 
 type TopTickerPlaceholderProps = {
   isColumnSettingsOpen: boolean;
+  onOpenEntityTimeline: () => void;
   onToggleColumnSettings: () => void;
   onThemeChange: (theme: AppTheme) => void;
   theme: AppTheme;
@@ -74,6 +75,7 @@ type TopTickerPlaceholderProps = {
 
 export default function TopTickerPlaceholder({
   isColumnSettingsOpen,
+  onOpenEntityTimeline,
   onToggleColumnSettings,
   onThemeChange,
   theme,
@@ -141,6 +143,15 @@ export default function TopTickerPlaceholder({
         </div>
       </div>
       <div className="top-bar-controls">
+        <button
+          aria-label="打开主体档案"
+          className="desktop-column-layout-toggle top-bar-entity-toggle"
+          onClick={onOpenEntityTimeline}
+          title="主体档案"
+          type="button"
+        >
+          档案
+        </button>
         <button
           aria-expanded={isColumnSettingsOpen}
           aria-label={isColumnSettingsOpen ? "收起栏目顺序" : "打开栏目顺序"}
