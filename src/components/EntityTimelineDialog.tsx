@@ -309,25 +309,14 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
                     />
                   </label>
                   <label>
-                    <span>主体类别</span>
-                    <select onChange={(changeEvent) => setDraftEntityType(changeEvent.target.value as EntityType)} value={draftEntityType}>
-                      {entityTypeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <span>相关链接</span>
+                    <input
+                      onChange={(inputEvent) => setEventDraft((current) => ({ ...current, url: inputEvent.target.value }))}
+                      placeholder="https://..."
+                      value={eventDraft.url}
+                    />
                   </label>
                 </div>
-
-                <label>
-                  <span>相关链接</span>
-                  <input
-                    onChange={(inputEvent) => setEventDraft((current) => ({ ...current, url: inputEvent.target.value }))}
-                    placeholder="https://..."
-                    value={eventDraft.url}
-                  />
-                </label>
 
                 <label>
                   <span>备注</span>
