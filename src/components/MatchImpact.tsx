@@ -112,9 +112,9 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
                       {event.kind === "red-card" && event.side === "away" ? <em className="impact-card-marker" aria-hidden="true">■</em> : null}
                       {event.kind === "goal" && event.side === "home" && event.ownGoal ? <em>OG</em> : null}
                       {event.kind === "goal" && event.side === "home" && !event.ownGoal && event.count > 1 && event.isLastForScorer ? <em>x{event.count}</em> : null}
-                      {event.kind === "goal" && event.side === "away" ? <em className="impact-goal-marker" aria-hidden="true">⚽</em> : null}
+                      {event.kind === "goal" && event.side === "away" ? <em className="impact-goal-marker" aria-hidden="true">●</em> : null}
                       <span>{event.player}</span>
-                      {event.kind === "goal" && event.side === "home" ? <em className="impact-goal-marker" aria-hidden="true">⚽</em> : null}
+                      {event.kind === "goal" && event.side === "home" ? <em className="impact-goal-marker" aria-hidden="true">●</em> : null}
                       {event.kind === "goal" && event.side === "away" && !event.ownGoal && event.count > 1 && event.isLastForScorer ? <em>x{event.count}</em> : null}
                       {event.kind === "goal" && event.side === "away" && event.ownGoal ? <em>OG</em> : null}
                       {event.kind === "red-card" && event.side === "home" ? <em className="impact-card-marker" aria-hidden="true">■</em> : null}
@@ -129,12 +129,18 @@ export default function MatchImpact({ matches, onOpenMatchRecord }: MatchImpactP
                 {match.penaltyShootout.rounds.map((round) => (
                   <div className="impact-penalty-round" key={round.round}>
                     <span className="impact-penalty-player home">{round.home?.player ?? ""}</span>
-                    <span className="impact-penalty-result home">
-                      {round.home ? (round.home.scored ? "✓" : "×") : ""}
+                    <span
+                      aria-label={round.home ? (round.home.scored ? "罚进" : "罚丢") : undefined}
+                      className={`impact-penalty-result home ${round.home ? (round.home.scored ? "is-scored" : "is-missed") : "is-empty"}`}
+                    >
+                      <span aria-hidden="true" className="impact-penalty-icon" />
                     </span>
                     <span className="impact-penalty-no">{round.round}</span>
-                    <span className="impact-penalty-result away">
-                      {round.away ? (round.away.scored ? "✓" : "×") : ""}
+                    <span
+                      aria-label={round.away ? (round.away.scored ? "罚进" : "罚丢") : undefined}
+                      className={`impact-penalty-result away ${round.away ? (round.away.scored ? "is-scored" : "is-missed") : "is-empty"}`}
+                    >
+                      <span aria-hidden="true" className="impact-penalty-icon" />
                     </span>
                     <span className="impact-penalty-player away">{round.away?.player ?? ""}</span>
                   </div>

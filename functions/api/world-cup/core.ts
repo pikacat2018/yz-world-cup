@@ -87,6 +87,7 @@ type FifaTimelineEvent = {
   HomeGoals?: number;
   IdTeam?: string;
   MatchMinute?: string;
+  Period?: number;
   Type?: number;
   TypeLocalized?: FifaLocalizedText[];
 };
@@ -108,10 +109,21 @@ export type MatchRedCard = {
   side: "away" | "home";
 };
 
+type PenaltyKick = {
+  player: string;
+  scored: boolean;
+};
+
+type PenaltyRound = {
+  away?: PenaltyKick;
+  home?: PenaltyKick;
+  round: number;
+};
+
 export type PenaltyShootout = {
   awayScore: number;
   homeScore: number;
-  rounds: [];
+  rounds: PenaltyRound[];
 };
 
 export type MatchPayload = {
@@ -327,6 +339,15 @@ function shouldFetchTimelineForLiveWindow(match: FifaCalendarMatch, now = Date.n
   return now - utcDate.getTime() <= TIMELINE_LOOKBACK_HOURS * 60 * 60 * 1000;
 }
 
+function isKnockoutStageMatch(match: FifaCalendarMatch) {
+  const stageName = getDescription(match.StageName).trim().toLowerCase();
+  return Boolean(stageName) && stageName !== "first stage";
+}
+
+function shouldAlwaysFetchTimeline(match: FifaCalendarMatch) {
+  return normalizeStatus(match.MatchStatus) === "finished" && isKnockoutStageMatch(match);
+}
+
 const extractGoalPlayerName = (description: string) => {
   const beforeBracket = description.split("(")[0]?.trim();
   if (beforeBracket) return beforeBracket.replace(/\s+scores!?\.?$/i, "").trim();
@@ -370,6 +391,18 @@ const extractCardPlayerName = (description: string) => {
   const generic = fallback.toLowerCase();
   if (generic === "red card given" || generic === "red card" || generic === "sent off") return undefined;
   return fallback;
+};
+
+const extractPenaltyPlayerName = (description: string) => {
+  const beforeBracket = description.split("(")[0]?.trim();
+  if (beforeBracket) {
+    return beforeBracket
+      .replace(/\s+successfully converts the penalty!?\.?$/i, "")
+      .replace(/\s+misses (?:his|her) penalty\.?$/i, "")
+      .replace(/\s+misses the penalty\.?$/i, "")
+      .trim();
+  }
+  return description.trim() || "Unknown";
 };
 
 function normalizeGoalEvents(match: FifaCalendarMatch, timeline?: FifaTimelineResponse) {
@@ -463,11 +496,49 @@ function normalizePenaltyShootout(match: FifaCalendarMatch) {
     return undefined;
   }
 
-  return {
+  const penaltyShootout: PenaltyShootout = {
     awayScore: match.AwayTeamPenaltyScore,
     homeScore: match.HomeTeamPenaltyScore,
     rounds: [],
-  } satisfies PenaltyShootout;
+  };
+
+  return penaltyShootout;
+}
+
+function normalizePenaltyShootoutRounds(match: FifaCalendarMatch, timeline?: FifaTimelineResponse) {
+  const events = Array.isArray(timeline?.Event) ? timeline.Event : [];
+  const homeTeamId = match.Home?.IdTeam;
+  const awayTeamId = match.Away?.IdTeam;
+  const rounds = new Map<number, PenaltyRound>();
+  let homeKickCount = 0;
+  let awayKickCount = 0;
+
+  for (const event of events) {
+    if (event.Period !== 11) continue;
+
+    const label = getDescription(event.TypeLocalized).toLowerCase();
+    const isScored = label.includes("penalty goal");
+    const isMissed = label.includes("penalty missed");
+    if (!isScored && !isMissed) continue;
+
+    const side =
+      event.IdTeam && event.IdTeam === awayTeamId
+        ? "away"
+        : event.IdTeam && event.IdTeam === homeTeamId
+          ? "home"
+          : null;
+    if (!side) continue;
+
+    const nextRound = side === "home" ? ++homeKickCount : ++awayKickCount;
+    const round = rounds.get(nextRound) ?? { round: nextRound };
+    round[side] = {
+      player: extractPenaltyPlayerName(getDescription(event.EventDescription)),
+      scored: isScored,
+    };
+    rounds.set(nextRound, round);
+  }
+
+  return [...rounds.values()].sort((a, b) => a.round - b.round);
 }
 
 function buildMatchPayload(match: FifaCalendarMatch, timeline?: FifaTimelineResponse): MatchPayload {
@@ -485,6 +556,10 @@ function buildMatchPayload(match: FifaCalendarMatch, timeline?: FifaTimelineResp
   const venue = getDescription(match.Stadium?.Name) || getDescription(match.Stadium?.CityName) || "待定球场";
   const goals = normalizeGoalEvents(match, timeline);
   const redCards = normalizeRedCardEvents(match, timeline);
+  const penaltyShootout = normalizePenaltyShootout(match);
+  if (penaltyShootout) {
+    penaltyShootout.rounds = normalizePenaltyShootoutRounds(match, timeline);
+  }
 
   return {
     awayLabel: awayTeamId ? undefined : match.Away?.ShortClubName || getDescription(match.Away?.TeamName) || match.PlaceHolderB,
@@ -500,7 +575,7 @@ function buildMatchPayload(match: FifaCalendarMatch, timeline?: FifaTimelineResp
       goals.length > 0
         ? "进球事件来自 FIFA 官方 timelines。"
         : "基础赛程、赛果、排名来自 FIFA 官方 API。",
-    penaltyShootout: normalizePenaltyShootout(match),
+    penaltyShootout,
     redCards,
     score,
     stage,
@@ -584,7 +659,10 @@ function buildGroups(matches: MatchPayload[], standingsByGroup: Map<string, Stan
 
 async function fetchMatchTimelines(matches: FifaCalendarMatch[]) {
   const now = Date.now();
-  const matchesNeedingTimeline = matches
+  const knockoutMatches = matches.filter((match) => shouldAlwaysFetchTimeline(match));
+  const knockoutMatchIds = new Set(knockoutMatches.map((match) => match.IdMatch).filter((matchId): matchId is string => Boolean(matchId)));
+  const liveWindowMatches = matches
+    .filter((match) => !match.IdMatch || !knockoutMatchIds.has(match.IdMatch))
     .filter((match) => shouldFetchTimelineForLiveWindow(match, now))
     .sort((a, b) => {
       const left = a.Date ? new Date(a.Date).getTime() : Number.MAX_SAFE_INTEGER;
@@ -592,6 +670,7 @@ async function fetchMatchTimelines(matches: FifaCalendarMatch[]) {
       return Math.abs(left - now) - Math.abs(right - now);
     })
     .slice(0, TIMELINE_MATCH_LIMIT);
+  const matchesNeedingTimeline = [...knockoutMatches, ...liveWindowMatches];
   const timelineEntries = await Promise.all(
     matchesNeedingTimeline.map(async (match) => {
       const matchId = match.IdMatch;
