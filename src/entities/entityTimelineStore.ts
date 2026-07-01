@@ -1,4 +1,5 @@
 import { getEditorAccessCode, isSharedEditingEnabled } from "../shared/onlineState";
+import { safeRemoveLocalStorage, safeSetLocalStorage } from "../shared/safeStorage";
 
 export type EntityType = "player" | "referee" | "official" | "fan" | "stadium" | "place" | "team" | "other";
 
@@ -16,7 +17,9 @@ export type EntityTimelineEvent = {
 export type EntityProfile = {
   id: string;
   name: string;
+  englishName?: string;
   type: EntityType;
+  bio?: string;
   aliases?: string[];
   createdAt: string;
   updatedAt: string;
@@ -29,6 +32,7 @@ export type EntityTimelineRecord = EntityProfile & {
 export const ENTITY_TIMELINE_UPDATED_EVENT = "yz-world-cup-entity-timeline-updated";
 
 const API_BASE = "/api/entity-timelines";
+const ENTITY_TIMELINE_STORAGE_KEY = "yz-world-cup-entity-timelines-v1";
 const MAX_ENTITY_TIMELINE_RECORDS = 5000;
 let hasHydratedRemoteEntityTimelines = false;
 let entityTimelineMemoryCache: EntityTimelineRecord[] = [];
@@ -66,6 +70,11 @@ const sanitizeAliases = (aliases?: string[]) =>
         .slice(0, 20),
     ),
   );
+
+const sanitizeOptionalText = (value?: string) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+};
 
 const isEntityTimelineEvent = (value: unknown): value is EntityTimelineEvent => {
   if (!value || typeof value !== "object") return false;
@@ -107,6 +116,8 @@ const isEntityTimelineRecord = (value: unknown): value is EntityTimelineRecord =
 
 const sanitizeEntityTimelineRecord = (record: EntityTimelineRecord): EntityTimelineRecord => ({
   ...record,
+  englishName: sanitizeOptionalText(record.englishName),
+  bio: sanitizeOptionalText(record.bio),
   aliases: sanitizeAliases(record.aliases),
   events: sortEntityTimelineEvents(record.events),
 });
@@ -124,10 +135,26 @@ const getRequestHeaders = () => ({
 
 const canUseRemoteEntityTimelines = () => isSharedEditingEnabled() && Boolean(getEditorAccessCode());
 
+function readEntityTimelineRecordsLocal(): EntityTimelineRecord[] {
+  if (typeof window === "undefined") return [];
+
+  const raw = window.localStorage.getItem(ENTITY_TIMELINE_STORAGE_KEY);
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? sortEntityTimelineRecords(parsed.filter(isEntityTimelineRecord)) : [];
+  } catch (error) {
+    console.warn("[entity-timelines] local read failed", error);
+    return [];
+  }
+}
+
 function saveEntityTimelineRecordsLocal(records: EntityTimelineRecord[]) {
   const deduped = new Map<string, EntityTimelineRecord>();
   for (const record of records) deduped.set(record.id, sanitizeEntityTimelineRecord(record));
   entityTimelineMemoryCache = sortEntityTimelineRecords(Array.from(deduped.values())).slice(0, MAX_ENTITY_TIMELINE_RECORDS);
+  safeSetLocalStorage(ENTITY_TIMELINE_STORAGE_KEY, JSON.stringify(entityTimelineMemoryCache));
 }
 
 async function pushEntityTimelineRecordRemote(record: EntityTimelineRecord) {
@@ -163,6 +190,9 @@ export function resetEntityTimelineHydration() {
 }
 
 export function readEntityTimelineRecords(): EntityTimelineRecord[] {
+  if (entityTimelineMemoryCache.length === 0) {
+    entityTimelineMemoryCache = readEntityTimelineRecordsLocal();
+  }
   return entityTimelineMemoryCache;
 }
 
@@ -185,6 +215,10 @@ export function hydrateEntityTimelineRecordsFromRemote(records: EntityTimelineRe
 }
 
 export async function hydrateEntityTimelineRecords(force = false) {
+  if (!readEntityTimelineRecords().length) {
+    entityTimelineMemoryCache = readEntityTimelineRecordsLocal();
+  }
+
   if (!canUseRemoteEntityTimelines() || (hasHydratedRemoteEntityTimelines && !force)) return;
 
   const response = await fetch(API_BASE, {
@@ -213,7 +247,7 @@ export function searchEntityTimelineRecords(query: string) {
   if (!normalizedQuery) return records;
 
   return records.filter((record) => {
-    const haystacks = [record.name, ...(record.aliases ?? [])].map(normalizeText);
+    const haystacks = [record.name, record.englishName ?? "", ...(record.aliases ?? [])].map(normalizeText);
     return haystacks.some((value) => value.includes(normalizedQuery));
   });
 }
@@ -229,7 +263,9 @@ export function createEntityTimelineRecord(name: string, type: EntityType, alias
   return {
     id: `entity-${slug}-${Date.now().toString(36)}`,
     name: normalizedName,
+    englishName: undefined,
     type,
+    bio: undefined,
     aliases: sanitizeAliases(aliases),
     createdAt: now,
     updatedAt: now,
@@ -278,4 +314,9 @@ export function deleteEntityTimelineRecord(entityId: string) {
   void deleteEntityTimelineRecordRemote(entityId).catch((error) => {
     console.warn("[entity-timelines] remote delete failed", error);
   });
+}
+
+export function clearEntityTimelineRecordsLocal() {
+  entityTimelineMemoryCache = [];
+  safeRemoveLocalStorage(ENTITY_TIMELINE_STORAGE_KEY);
 }
