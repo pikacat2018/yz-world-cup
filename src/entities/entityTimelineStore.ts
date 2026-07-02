@@ -249,7 +249,13 @@ export function searchEntityTimelineRecords(query: string) {
   return records.filter((record) => {
     const haystacks = [record.name, record.englishName ?? "", ...(record.aliases ?? [])].map(normalizeText);
     return haystacks.some((value) => value.includes(normalizedQuery));
-  });
+    });
+}
+
+export function getRecentlyUpdatedEntityTimelineRecords(limit = 8) {
+  return [...readEntityTimelineRecords()]
+    .sort((a, b) => getRecordTime(b) - getRecordTime(a) || a.name.localeCompare(b.name, "zh-CN"))
+    .slice(0, Math.max(0, limit));
 }
 
 export function createEntityTimelineRecord(name: string, type: EntityType, aliases?: string[]) {

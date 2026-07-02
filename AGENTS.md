@@ -66,6 +66,9 @@
 - Preserve the four-column workbench structure and continuity of the main information flow unless a larger layout change is explicitly requested.
 - Prioritize discoverability of news, fixtures, follow-up items, and editorial state.
 - Keep information density and editing efficiency ahead of decorative presentation.
+- Avoid meaningless whitespace in workbench views: do not leave large empty bands between title rows, toolbars, detail rows, and primary content when real content can be shown in that space.
+- For detail panels, timelines, lists, and editors, default to top-aligned compact stacking. Do not use flexible spacer rows or oversized containers that visually push active content into the middle of the panel.
+- Keep header rows, summary rows, and primary action rows close to text height unless a larger control is functionally required.
 - When changing one area, check whether adjacent columns, shared controls, scrolling, and editing actions are affected.
 - For large layout changes, analyze workflow impact before implementation.
 - Detailed visual-method guidance belongs in the `workbench-ui-review` Skill, not in this project file.

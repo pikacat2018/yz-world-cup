@@ -4,6 +4,7 @@ import {
   createEntityTimelineRecord,
   deleteEntityTimelineRecord,
   ENTITY_TIMELINE_UPDATED_EVENT,
+  getRecentlyUpdatedEntityTimelineRecords,
   hydrateEntityTimelineRecords,
   readEntityTimelineRecords,
   searchEntityTimelineRecords,
@@ -59,6 +60,7 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
   const records = useMemo(() => readEntityTimelineRecords(), [recordsVersion]);
   const trimmedQuery = query.trim();
   const results = useMemo(() => searchEntityTimelineRecords(query), [query, recordsVersion]);
+  const recentRecords = useMemo(() => getRecentlyUpdatedEntityTimelineRecords(6), [recordsVersion]);
   const selectedRecord = records.find((record) => record.id === selectedEntityId);
   const editingEvent = selectedRecord?.events.find((event) => event.id === editingEventId);
   const hasExactMatch = results.some((record) => record.name.trim().toLowerCase() === trimmedQuery.toLowerCase());
@@ -239,6 +241,10 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
     setQuery("");
   };
 
+  const handleOpenAllRecords = () => {
+    window.location.href = "/entity-timelines";
+  };
+
   return (
     <div className="selected-export-backdrop entity-timeline-backdrop" onClick={onClose} role="presentation">
       <div
@@ -268,19 +274,42 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
           <div className="entity-timeline-search-screen">
             <label className="news-search entity-timeline-search entity-timeline-search-only" aria-label="搜索主体档案">
               <span className="news-search-icon" aria-hidden="true">
-                ⌕
+                🔎
               </span>
               <input
                 autoFocus
                 onChange={(inputEvent) => setQuery(inputEvent.target.value)}
-                placeholder="输入球员、裁判、球队、球场等主体名称"
+                placeholder="输入球员、球队、裁判、球场等主体名称"
                 type="search"
                 value={query}
               />
               <span className="news-search-count">{trimmedQuery ? results.length : records.length}</span>
             </label>
 
-            {trimmedQuery ? (
+            {!trimmedQuery ? (
+              <div className="entity-timeline-search-home">
+                <div className="entity-timeline-search-home-head">
+                  <strong>最近编辑</strong>
+                  <button className="entity-timeline-open-all-button" onClick={handleOpenAllRecords} type="button">
+                    显示全部
+                  </button>
+                </div>
+                <div className="entity-timeline-result-list entity-timeline-search-home-list" role="list" aria-label="最近编辑的词条">
+                  {recentRecords.length > 0 ? (
+                    recentRecords.map((record) => (
+                      <button className="entity-timeline-result entity-timeline-recent-result" key={record.id} onClick={() => openEntityDetail(record)} type="button">
+                        <strong>{record.name}</strong>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="entity-timeline-empty entity-timeline-empty-search">
+                      <strong>还没有最近编辑记录</strong>
+                      <span>先搜索并新建一个词条，之后这里会显示最近编辑项。</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
               <div className="entity-timeline-result-list entity-timeline-search-results" role="list" aria-label="主体搜索结果">
                 {results.length > 0 ? (
                   results.map((record) => (
@@ -296,7 +325,7 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
                   <button className="entity-timeline-result entity-timeline-create-option" onClick={handleCreateEntity} type="button">
                     <strong>新建：{trimmedQuery}</strong>
                     <div className="entity-timeline-inline-create">
-                      <span>没有找到现有主体，点击进入主体页面编辑。</span>
+                      <span>没有找到现有主体，点击后进入主体页面编辑。</span>
                       <select
                         onChange={(changeEvent) => setDraftEntityType(changeEvent.target.value as EntityType)}
                         onClick={(clickEvent) => clickEvent.stopPropagation()}
@@ -312,7 +341,7 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
                   </button>
                 ) : null}
               </div>
-            ) : null}
+            )}
           </div>
         ) : selectedRecord ? (
           <div className="entity-timeline-layout">
@@ -361,114 +390,110 @@ export default function EntityTimelineDialog({ onClose }: EntityTimelineDialogPr
             {detailPane ? (
               <aside className="entity-timeline-sidebar entity-timeline-editor-pane">
                 {detailPane === "profile" ? (
-                <form className="entity-timeline-event-form" onSubmit={handleSubmitProfile}>
-                  <label>
-                    <span>主体名字</span>
-                    <input
-                      onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, name: inputEvent.target.value }))}
-                      value={profileDraft.name}
-                    />
-                  </label>
-
-                  <div className="entity-timeline-form-grid">
+                  <form className="entity-timeline-event-form" onSubmit={handleSubmitProfile}>
                     <label>
-                      <span>英文名</span>
+                      <span>主体名字</span>
                       <input
-                        onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, englishName: inputEvent.target.value }))}
-                        placeholder="可选"
-                        value={profileDraft.englishName}
+                        onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, name: inputEvent.target.value }))}
+                        value={profileDraft.name}
                       />
                     </label>
+
+                    <div className="entity-timeline-form-grid">
+                      <label>
+                        <span>英文名</span>
+                        <input
+                          onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, englishName: inputEvent.target.value }))}
+                          placeholder="可选"
+                          value={profileDraft.englishName}
+                        />
+                      </label>
+                      <label>
+                        <span>主体类别</span>
+                        <select
+                          onChange={(changeEvent) => setProfileDraft((current) => ({ ...current, type: changeEvent.target.value as EntityType }))}
+                          value={profileDraft.type}
+                        >
+                          {entityTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
                     <label>
-                      <span>主体类别</span>
-                      <select
-                        onChange={(changeEvent) => setProfileDraft((current) => ({ ...current, type: changeEvent.target.value as EntityType }))}
-                        value={profileDraft.type}
-                      >
-                        {entityTypeOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
-                  <label>
-                    <span>简介</span>
-                    <textarea
-                      onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, bio: inputEvent.target.value }))}
-                      placeholder="可选，记录这个主体的简介或说明"
-                      value={profileDraft.bio}
-                    />
-                  </label>
-
-                  <div className="follow-up-add-actions entity-timeline-form-actions">
-                    <button onClick={handleCloseDetailPane} type="button">
-                      关闭
-                    </button>
-                    <button className="match-record-delete entity-timeline-editor-delete" onClick={handleDeleteEntity} type="button">
-                      删除主体
-                    </button>
-                    <button type="submit">保存主体信息</button>
-                  </div>
-                </form>
-              ) : (
-                <form className="entity-timeline-event-form" onSubmit={handleSubmitEvent}>
-                  <label>
-                    <span>事迹简述</span>
-                    <input
-                      onChange={(inputEvent) => setEventDraft((current) => ({ ...current, title: inputEvent.target.value }))}
-                      placeholder="例如：宣布退役、确认执法、球场启用"
-                      value={eventDraft.title}
-                    />
-                  </label>
-
-                  <div className="entity-timeline-form-grid">
-                    <label>
-                      <span>时间</span>
-                      <input
-                        onChange={(inputEvent) => setEventDraft((current) => ({ ...current, date: inputEvent.target.value }))}
-                        type="date"
-                        value={eventDraft.date}
+                      <span>简介</span>
+                      <textarea
+                        onChange={(inputEvent) => setProfileDraft((current) => ({ ...current, bio: inputEvent.target.value }))}
+                        placeholder="可选，记录这个主体的简介或说明"
+                        value={profileDraft.bio}
                       />
                     </label>
-                    <label>
-                      <span>相关链接</span>
-                      <input
-                        onChange={(inputEvent) => setEventDraft((current) => ({ ...current, url: inputEvent.target.value }))}
-                        placeholder="https://..."
-                        value={eventDraft.url}
-                      />
-                    </label>
-                  </div>
 
-                  <label>
-                    <span>备注</span>
-                    <textarea
-                      onChange={(inputEvent) => setEventDraft((current) => ({ ...current, note: inputEvent.target.value }))}
-                      placeholder="补充背景、细节或后续线索"
-                      value={eventDraft.note}
-                    />
-                  </label>
-
-                  <div className="follow-up-add-actions entity-timeline-form-actions">
-                    <button onClick={handleCloseDetailPane} type="button">
-                      {editingEvent ? "取消编辑" : "关闭"}
-                    </button>
-                    {editingEvent ? (
-                      <button
-                        className="match-record-delete entity-timeline-editor-delete"
-                        onClick={() => handleDeleteEvent(editingEvent)}
-                        type="button"
-                      >
-                        删除
+                    <div className="follow-up-add-actions entity-timeline-form-actions">
+                      <button onClick={handleCloseDetailPane} type="button">
+                        关闭
                       </button>
-                    ) : null}
-                    <button type="submit">{editingEvent ? "更新事迹" : "新增事迹"}</button>
-                  </div>
-                </form>
-              )}
+                      <button className="match-record-delete entity-timeline-editor-delete" onClick={handleDeleteEntity} type="button">
+                        删除主体
+                      </button>
+                      <button type="submit">保存主体信息</button>
+                    </div>
+                  </form>
+                ) : (
+                  <form className="entity-timeline-event-form" onSubmit={handleSubmitEvent}>
+                    <label>
+                      <span>事迹标题</span>
+                      <input
+                        onChange={(inputEvent) => setEventDraft((current) => ({ ...current, title: inputEvent.target.value }))}
+                        placeholder="例如：宣布退役、确认执法、球场启用"
+                        value={eventDraft.title}
+                      />
+                    </label>
+
+                    <div className="entity-timeline-form-grid">
+                      <label>
+                        <span>时间</span>
+                        <input
+                          onChange={(inputEvent) => setEventDraft((current) => ({ ...current, date: inputEvent.target.value }))}
+                          type="date"
+                          value={eventDraft.date}
+                        />
+                      </label>
+                      <label>
+                        <span>相关链接</span>
+                        <input
+                          onChange={(inputEvent) => setEventDraft((current) => ({ ...current, url: inputEvent.target.value }))}
+                          placeholder="https://..."
+                          value={eventDraft.url}
+                        />
+                      </label>
+                    </div>
+
+                    <label>
+                      <span>备注</span>
+                      <textarea
+                        onChange={(inputEvent) => setEventDraft((current) => ({ ...current, note: inputEvent.target.value }))}
+                        placeholder="补充背景、细节或后续线索"
+                        value={eventDraft.note}
+                      />
+                    </label>
+
+                    <div className="follow-up-add-actions entity-timeline-form-actions">
+                      <button onClick={handleCloseDetailPane} type="button">
+                        {editingEvent ? "取消编辑" : "关闭"}
+                      </button>
+                      {editingEvent ? (
+                        <button className="match-record-delete entity-timeline-editor-delete" onClick={() => handleDeleteEvent(editingEvent)} type="button">
+                          删除
+                        </button>
+                      ) : null}
+                      <button type="submit">{editingEvent ? "更新事迹" : "新增事迹"}</button>
+                    </div>
+                  </form>
+                )}
               </aside>
             ) : null}
           </div>

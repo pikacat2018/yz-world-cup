@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import AllGroupsOverview from "./components/AllGroupsOverview";
 import AllSchedulePage from "./components/AllSchedulePage";
 import EditorAccessGate from "./components/EditorAccessGate";
+import EntityTimelinePage from "./components/EntityTimelinePage";
 import Layout from "./components/Layout";
 import { type AppTheme, isAppTheme, THEME_STORAGE_KEY } from "./components/ThemeToggle";
 import { useWorldCupData } from "./matches/worldCupDataStore";
@@ -97,6 +98,10 @@ export default function App() {
 
   if (routePath === "/schedule") {
     return <AllSchedulePage />;
+  }
+
+  if (routePath === "/entity-timelines") {
+    return <EntityTimelinePage />;
   }
 
   return <LockedEditorApp onThemeChange={setTheme} theme={theme} />;
